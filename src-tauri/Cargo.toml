@@ -1,0 +1,31 @@
+[package]
+name = "file2file"
+version = "0.1.0"
+description = "Universal Local File Converter desktop application"
+authors = ["file2file contributors"]
+edition = "2021"
+
+[lib]
+name = "file2file_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+num_cpus = "1.16"
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.10", features = ["v4", "serde"] }
+log = "0.4"
+env_logger = "0.11"
+regex = "1.10"
+walkdir = "2.5"
+base64 = "0.13"

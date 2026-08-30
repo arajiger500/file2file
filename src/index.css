@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #09090b;
+  --surface: #131316;
+  --surface-raised: #1c1c21;
+  --brand: #3b82f6;
+  --border: #27272a;
+}
+
+body {
+  background-color: var(--background);
+  color: #f4f4f5;
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-surface/40 backdrop-blur-xl border border-border rounded-3xl transition-all duration-300;
+  }
+
+  .pro-button {
+    @apply px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-95;
+  }
+
+  .pro-button-primary {
+    @apply pro-button bg-brand text-white shadow-lg shadow-brand/20 hover:bg-blue-500 hover:shadow-brand/40;
+  }
+
+  .pro-button-secondary {
+    @apply pro-button bg-surface-raised border border-border text-zinc-300 hover:text-white hover:border-zinc-500;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+/* Custom Pro Animations */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}

@@ -1,0 +1,29 @@
+# Node & Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Tauri & Rust
+src-tauri/target/
+src-tauri/gen/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment & Editor
+.env
+.env.*
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+!.vscode/tasks.json
+.idea/
+
+# Large Binaries (Bundled at build time, not in source)
+binaries/
+src-tauri/binaries/
+src-tauri/sample_test.*
