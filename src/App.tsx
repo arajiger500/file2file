@@ -165,8 +165,6 @@ export function App() {
                             files={files}
                             format={selectedFormatOption}
                             settings={settings}
-                            onChangeSettings={setSettings}
-                            hardware={hardware}
                             onBackToFormats={() => setCurrentStep("select-format")}
                             onResetToUpload={() => { setFiles([]); setCurrentStep("upload"); }}
                             onUpdateFileStatus={handleUpdateFileStatus}

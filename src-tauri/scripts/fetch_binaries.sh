@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-BIN_DIR="$ROOT_DIR/binaries/linux-x86_64"
+BIN_DIR="$ROOT_DIR/binaries"
 mkdir -p "$BIN_DIR"
 
 echo "Downloading ffmpeg (static)..."
@@ -16,9 +16,9 @@ if [ -z "$ffdir" ]; then
   echo "ffmpeg dir not found in archive" >&2
   exit 1
 fi
-cp "$ffdir/ffmpeg" "$BIN_DIR/ffmpeg"
-cp "$ffdir/ffprobe" "$BIN_DIR/ffprobe"
-chmod +x "$BIN_DIR/ffmpeg" "$BIN_DIR/ffprobe"
+cp "$ffdir/ffmpeg" "$BIN_DIR/ffmpeg-x86_64-unknown-linux-gnu"
+cp "$ffdir/ffprobe" "$BIN_DIR/ffprobe-x86_64-unknown-linux-gnu"
+chmod +x "$BIN_DIR/ffmpeg-x86_64-unknown-linux-gnu" "$BIN_DIR/ffprobe-x86_64-unknown-linux-gnu"
 popd >/dev/null
 rm -rf "$tmpdir"
 
@@ -29,8 +29,8 @@ tmpdir=$(mktemp -d)
 pushd "$tmpdir" >/dev/null
 curl -L -o pandoc.tar.gz "$PANDOC_URL"
 tar -xzf pandoc.tar.gz
-cp pandoc-*/bin/pandoc "$BIN_DIR/pandoc"
-chmod +x "$BIN_DIR/pandoc"
+cp pandoc-*/bin/pandoc "$BIN_DIR/pandoc-x86_64-unknown-linux-gnu"
+chmod +x "$BIN_DIR/pandoc-x86_64-unknown-linux-gnu"
 popd >/dev/null
 rm -rf "$tmpdir"
 

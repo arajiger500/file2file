@@ -27,7 +27,8 @@ export interface BinaryStatus {
 export interface SidecarHealthReport {
     ffmpeg: BinaryStatus;
     pandoc: BinaryStatus;
-    svgo: BinaryStatus;
+    imagemagick: BinaryStatus;
+    pdftotext: BinaryStatus;
     all_ready: boolean;
 }
 

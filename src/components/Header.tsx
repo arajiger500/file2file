@@ -43,10 +43,10 @@ export const Header: React.FC<HeaderProps> = ({
                 {/* Sidecar status pill */}
                 <div
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-surface-raised border border-border text-slate-300"
-                    title="Sidecar Binaries: FFmpeg, Pandoc, SVGO"
+                    title="Conversion tools: FFmpeg, Pandoc, ImageMagick, and Poppler"
                 >
                     <ShieldCheck className={`w-3.5 h-3.5 ${sidecars?.all_ready ? "text-emerald-400" : "text-amber-400"}`} />
-                    <span className="font-medium">Sidecars: {sidecars?.all_ready ? "Active" : "Ready"}</span>
+                    <span className="font-medium">Tools: {sidecars?.all_ready ? "Active" : "Needs setup"}</span>
                 </div>
 
                 {/* Hardware acceleration badge */}

@@ -28,7 +28,10 @@ mod commands {
     }
 
     #[tauri::command]
-    pub async fn start_conversion(app: AppHandle, request: ConversionRequest) -> Result<ConversionResult, String> {
+    pub async fn start_conversion(
+        app: AppHandle,
+        request: ConversionRequest,
+    ) -> Result<ConversionResult, String> {
         convert_single_file(app, request).await
     }
 
@@ -42,7 +45,9 @@ mod commands {
     #[tauri::command]
     pub fn write_base64_file(path: String, b64: String) -> Result<(), String> {
         match base64::decode(&b64) {
-            Ok(bytes) => std::fs::write(&path, &bytes).map_err(|e| format!("Failed to write file: {}", e)),
+            Ok(bytes) => {
+                std::fs::write(&path, &bytes).map_err(|e| format!("Failed to write file: {}", e))
+            }
             Err(e) => Err(format!("Base64 decode error: {}", e)),
         }
     }

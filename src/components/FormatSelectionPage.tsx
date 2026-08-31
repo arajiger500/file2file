@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Search, ArrowLeft, Zap, Sparkles, Filter, Grid, List } from "lucide-react";
+import { Search, ArrowLeft, Sparkles } from "lucide-react";
 import { FileItem, FormatOption } from "../types";
 
 interface FormatSelectionPageProps {

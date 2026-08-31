@@ -1,20 +1,18 @@
 import React, { useState } from "react";
-import { ArrowLeft, Play, Loader2, Download, CheckCircle2, AlertCircle, Cpu, Zap, HardDrive, Clock, RefreshCw } from "lucide-react";
-import { FileItem, FormatOption, AdvancedSettings, HardwareInfo, ConversionResult } from "../types";
+import { ArrowLeft, Play, Loader2, CheckCircle2, Cpu, Zap, HardDrive, Clock, RefreshCw } from "lucide-react";
+import { FileItem, FormatOption, AdvancedSettings, ConversionResult } from "../types";
 import { api, downloadFile } from "../services/api";
 
 interface ConversionStudioProps {
     files: FileItem[];
     format: FormatOption;
     settings: AdvancedSettings;
-    onChangeSettings: (settings: AdvancedSettings) => void;
-    hardware: HardwareInfo | null;
     onBackToFormats: () => void;
     onResetToUpload: () => void;
     onUpdateFileStatus: (id: string, status: FileItem["status"], result?: ConversionResult) => void;
 }
 
-export const ConversionStudio: React.FC<ConversionStudioProps> = ({ files, format, settings, onChangeSettings, hardware, onBackToFormats, onResetToUpload, onUpdateFileStatus }) => {
+export const ConversionStudio: React.FC<ConversionStudioProps> = ({ files, format, settings, onBackToFormats, onResetToUpload, onUpdateFileStatus }) => {
     const [isConverting, setIsConverting] = useState(false);
     const [results, setResults] = useState<ConversionResult[]>([]);
 

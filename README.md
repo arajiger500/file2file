@@ -6,7 +6,7 @@ A high-performance, **100% offline and private** universal desktop file converte
 
 ## 🚀 Key Features
 
-- **🔒 100% Local & Offline Processing:** No cloud uploads, telemetry, or external API requirements. All transcoding runs locally using high-performance sidecar binaries (`FFmpeg`, `Pandoc`, `SVGO`).
+- **🔒 100% Local & Offline Processing:** No cloud uploads, telemetry, or external API requirements. Media and document conversion runs locally with bundled `FFmpeg` and `Pandoc`; image conversion uses local ImageMagick.
 - **⚡ Hardware Auto-Detection & Acceleration:** Probes available GPU hardware encoders on startup:
   - **NVIDIA:** NVENC (`h264_nvenc`, `hevc_nvenc`)
   - **AMD / Linux:** VA-API / AMF (`h264_vaapi`, `h264_amf`)
@@ -33,7 +33,7 @@ file2file/
 │   │   ├── converter.rs             # Transcoding orchestrator & CLI command builder
 │   │   ├── formats.rs               # Format registry, categories, & contextual recommendations
 │   │   ├── hardware.rs              # GPU hardware encoder auto-detection & CPU fallback
-│   │   ├── sidecar.rs               # Native binary probing & health check
+│   │   ├── sidecar.rs               # Local conversion-tool probing & health check
 │   │   ├── lib.rs                   # Tauri application entry & IPC command handlers
 │   │   └── main.rs                  # Native application entry point
 │   ├── build.rs
@@ -67,7 +67,7 @@ file2file/
 ### Prerequisites
 - **Node.js**: v18+ and `npm`
 - **Rust**: `rustc` and `cargo` (via [rustup.rs](https://rustup.rs/))
-- **Sidecar Binaries or System Packages**: `ffmpeg`, `pandoc`, `magick` (ImageMagick), `svgo`
+- **Sidecar Binaries or System Packages**: `ffmpeg`, `pandoc`, `magick` (ImageMagick), and `pdftotext` (Poppler)
 
 ### 1. Install Dependencies
 ```bash
@@ -100,6 +100,5 @@ For standalone, self-contained desktop builds, download target-specific sidecar 
 | :--- | :--- | :--- | :--- |
 | **FFmpeg** | `ffmpeg-x86_64-unknown-linux-gnu` | `ffmpeg-x86_64-pc-windows-msvc.exe` | `ffmpeg-aarch64-apple-darwin` |
 | **Pandoc** | `pandoc-x86_64-unknown-linux-gnu` | `pandoc-x86_64-pc-windows-msvc.exe` | `pandoc-aarch64-apple-darwin` |
-| **SVGO** | `svgo-x86_64-unknown-linux-gnu` | `svgo-x86_64-pc-windows-msvc.exe` | `svgo-aarch64-apple-darwin` |
 
 *Note: During local development, File2File automatically resolves standard system-installed binaries from your `PATH` if bundle sidecars are not yet present.*

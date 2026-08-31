@@ -35,8 +35,7 @@
         ],
         "externalBin": [
             "binaries/ffmpeg",
-            "binaries/pandoc",
-            "binaries/svgo"
+            "binaries/pandoc"
         ]
     },
     "plugins": {

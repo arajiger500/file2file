@@ -1,6 +1,7 @@
-import React, { useRef, useState } from "react";
-import { Upload, Folder, File as FileIcon, X, Loader2 } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Upload, Folder, File as FileIcon, X } from "lucide-react";
 import { FileItem, FileCategory } from "../types";
+import { isTauri } from "../services/api";
 
 interface DropZoneProps {
     files: FileItem[];
@@ -38,13 +39,69 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
         onAddFiles(items);
     };
 
+    const processPaths = async (paths: string[]) => {
+        const { stat } = await import("@tauri-apps/plugin-fs");
+        const items = await Promise.all(paths.map(async (path): Promise<FileItem | null> => {
+            const metadata = await stat(path);
+            if (metadata.isDirectory) return null;
+            const name = path.split(/[\\/]/).pop() || path;
+            const extension = name.split(".").pop() || "";
+            return {
+                id: crypto.randomUUID(),
+                path,
+                name,
+                size: metadata.size,
+                extension,
+                category: detectCategory(extension),
+                status: "pending" as const,
+            };
+        }));
+        onAddFiles(items.filter((item): item is FileItem => item !== null));
+    };
+
+    useEffect(() => {
+        if (!isTauri()) return;
+
+        let unlisten: (() => void) | undefined;
+        void import("@tauri-apps/api/window").then(({ getCurrentWindow }) =>
+            getCurrentWindow().onDragDropEvent((event) => {
+                if (event.payload.type === "over") {
+                    setIsDragging(true);
+                } else if (event.payload.type === "drop") {
+                    setIsDragging(false);
+                    void processPaths(event.payload.paths);
+                } else {
+                    setIsDragging(false);
+                }
+            }).then((stop) => { unlisten = stop; })
+        );
+
+        return () => unlisten?.();
+    }, []);
+
+    const handleSelectFiles = async () => {
+        if (!isTauri()) {
+            fileRef.current?.click();
+            return;
+        }
+
+        const { open } = await import("@tauri-apps/plugin-dialog");
+        const selected = await open({ multiple: true, directory: false });
+        if (!selected) return;
+        await processPaths(Array.isArray(selected) ? selected : [selected]);
+    };
+
     return (
         <div className="space-y-6">
             <div
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
-                onDrop={(e) => { e.preventDefault(); setIsDragging(false); processFiles(e.dataTransfer.files); }}
-                onClick={() => fileRef.current?.click()}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    if (!isTauri()) processFiles(e.dataTransfer.files);
+                }}
+                onClick={() => { void handleSelectFiles(); }}
                 className={`group relative overflow-hidden h-72 border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center transition-all duration-500 cursor-pointer ${
                     isDragging ? "border-blue-500 bg-blue-500/5 scale-[0.98]" : "border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/50 hover:border-zinc-700"
                 }`}

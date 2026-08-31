@@ -1,8 +1,8 @@
 use crate::formats::{get_category_for_extension, FileCategory};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use tauri_plugin_shell::ShellExt;
 use std::time::Instant;
+use tauri_plugin_shell::ShellExt;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,17 +30,30 @@ pub struct ConversionResult {
     pub error: Option<String>,
 }
 
-pub async fn convert_single_file(app: tauri::AppHandle, req: ConversionRequest) -> Result<ConversionResult, String> {
+pub async fn convert_single_file(
+    app: tauri::AppHandle,
+    req: ConversionRequest,
+) -> Result<ConversionResult, String> {
     let input_path = Path::new(&req.input_path);
     if !input_path.exists() {
         return Err(format!("Input file does not exist: {}", req.input_path));
     }
 
-    let input_ext = input_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-    let stem = input_path.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+    let input_ext = input_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    let stem = input_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("output");
     let out_dir = match &req.output_dir {
         Some(d) => PathBuf::from(d),
-        None => input_path.parent().unwrap_or_else(|| Path::new(".")).to_path_buf(),
+        None => input_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf(),
     };
 
     let target_ext = req.target_format.to_lowercase();
@@ -53,13 +66,12 @@ pub async fn convert_single_file(app: tauri::AppHandle, req: ConversionRequest) 
     let category = get_category_for_extension(&input_ext);
     let target_category = get_category_for_extension(&target_ext);
 
-    // Specialized Logic for PDF to DOCX (Real Conversion)
-    let execution_result = if input_ext == "pdf" && target_ext == "docx" {
-        run_pdf_to_docx_conversion(&app, input_path, &output_path).await
+    let execution_result = if input_ext == "pdf" {
+        run_pdf_conversion(&app, input_path, &output_path, &target_ext).await
+    } else if category == FileCategory::Image || category == FileCategory::Vector {
+        run_image_magick_conversion(input_path, &output_path).await
     } else if target_category == FileCategory::Document {
         run_pandoc_conversion(&app, input_path, &output_path).await
-    } else if target_ext == "svg" && category == FileCategory::Vector {
-        run_svgo_optimization(&app, input_path, &output_path).await
     } else {
         run_ffmpeg_conversion(&app, &req, input_path, &output_path, &target_ext).await
     };
@@ -68,7 +80,9 @@ pub async fn convert_single_file(app: tauri::AppHandle, req: ConversionRequest) 
 
     match execution_result {
         Ok(_) => {
-            let converted_size = std::fs::metadata(&output_path).map(|m| m.len()).unwrap_or(0);
+            let converted_size = std::fs::metadata(&output_path)
+                .map(|m| m.len())
+                .unwrap_or(0);
             Ok(ConversionResult {
                 job_id: Uuid::new_v4().to_string(),
                 input_path: req.input_path.clone(),
@@ -93,33 +107,51 @@ pub async fn convert_single_file(app: tauri::AppHandle, req: ConversionRequest) 
     }
 }
 
-async fn run_pdf_to_docx_conversion(app: &tauri::AppHandle, input: &Path, output: &Path) -> Result<(), String> {
-    // Try to find a real document engine on the system
+async fn run_pdf_conversion(
+    app: &tauri::AppHandle,
+    input: &Path,
+    output: &Path,
+    target_ext: &str,
+) -> Result<(), String> {
     let out_dir = output.parent().unwrap_or_else(|| Path::new("."));
 
-    // Attempt 1: LibreOffice (soffice)
-    let lo_res = std::process::Command::new("soffice")
-        .args(vec![
-            "--headless",
-            "--convert-to", "docx",
-            "--outdir", out_dir.to_str().unwrap(),
-            input.to_str().unwrap()
-        ])
-        .output();
+    let text_path = out_dir.join(format!(".file2file-{}.txt", Uuid::new_v4()));
+    let extracted = std::process::Command::new("pdftotext")
+        .args(["-layout", input.to_str().unwrap(), text_path.to_str().unwrap()])
+        .output()
+        .map_err(|_| "PDF conversion requires Poppler's pdftotext utility. Install poppler-utils and try again.".to_string())?;
 
-    if let Ok(out) = lo_res {
-        if out.status.success() {
-            // LibreOffice names the file based on the input name, we might need to rename it to match output
-            let lo_output_name = input.file_stem().unwrap().to_str().unwrap().to_owned() + ".docx";
-            let lo_output_path = out_dir.join(lo_output_name);
-            if lo_output_path.exists() && lo_output_path != output {
-                let _ = std::fs::rename(lo_output_path, output);
-            }
-            return Ok(());
-        }
+    if !extracted.status.success() {
+        return Err(String::from_utf8_lossy(&extracted.stderr)
+            .trim()
+            .to_string());
     }
 
-    Err("Real PDF-to-DOCX conversion requires LibreOffice (soffice) to be installed on your system.".to_string())
+    let result = if target_ext == "txt" {
+        std::fs::rename(&text_path, output)
+            .map_err(|e| format!("Could not save extracted text: {e}"))
+    } else {
+        let result = run_pandoc_conversion(app, &text_path, output).await;
+        let _ = std::fs::remove_file(&text_path);
+        result
+    };
+
+    result
+}
+
+async fn run_image_magick_conversion(input: &Path, output: &Path) -> Result<(), String> {
+    let result = std::process::Command::new("magick")
+        .args([input.to_str().unwrap(), output.to_str().unwrap()])
+        .output()
+        .map_err(|_| {
+            "Image conversion requires ImageMagick (magick) to be installed.".to_string()
+        })?;
+
+    if result.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&result.stderr).trim().to_string())
+    }
 }
 
 async fn run_ffmpeg_conversion(
@@ -146,7 +178,11 @@ async fn execute_ffmpeg(
     target_ext: &str,
     use_hw: bool,
 ) -> Result<(), String> {
-    let mut args = vec!["-y".to_string(), "-i".to_string(), input.to_str().unwrap().to_string()];
+    let mut args = vec![
+        "-y".to_string(),
+        "-i".to_string(),
+        input.to_str().unwrap().to_string(),
+    ];
 
     match target_ext {
         "mp4" | "mov" | "mkv" | "webm" | "avi" => {
@@ -158,7 +194,7 @@ async fn execute_ffmpeg(
                 let codec = match target_ext {
                     "webm" => "libvpx-vp9",
                     "avi" => "mpeg4",
-                    _ => "libx264"
+                    _ => "libx264",
                 };
                 args.push("-c:v".to_string());
                 args.push(codec.to_string());
@@ -178,7 +214,7 @@ async fn execute_ffmpeg(
                 args.push("aac".to_string());
             }
         }
-        "mp3" | "wav" | "flac" | "aac" | "ogg" | "opus" => {
+        "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" | "opus" => {
             args.push("-vn".to_string());
             match target_ext {
                 "mp3" => {
@@ -199,29 +235,35 @@ async fn execute_ffmpeg(
                     args.push("-c:a".to_string());
                     args.push("libopus".to_string());
                 }
+                "ogg" => {
+                    args.push("-c:a".to_string());
+                    args.push("libvorbis".to_string());
+                }
+                "m4a" => {
+                    args.push("-c:a".to_string());
+                    args.push("aac".to_string());
+                }
                 _ => {
                     args.push("-c:a".to_string());
                     args.push("aac".to_string());
                 }
             }
         }
-        "webp" | "png" | "jpg" | "jpeg" | "avif" | "gif" | "bmp" | "tiff" => {
-            match target_ext {
-                "webp" => {
-                    args.push("-c:v".to_string());
-                    args.push("libwebp".to_string());
-                }
-                "avif" => {
-                    args.push("-c:v".to_string());
-                    args.push("libaom-av1".to_string());
-                }
-                "gif" => {
-                    args.push("-vf".to_string());
-                    args.push("fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse".to_string());
-                }
-                _ => {}
+        "webp" | "png" | "jpg" | "jpeg" | "avif" | "gif" | "bmp" | "tiff" => match target_ext {
+            "webp" => {
+                args.push("-c:v".to_string());
+                args.push("libwebp".to_string());
             }
-        }
+            "avif" => {
+                args.push("-c:v".to_string());
+                args.push("libaom-av1".to_string());
+            }
+            "gif" => {
+                args.push("-vf".to_string());
+                args.push("fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse".to_string());
+            }
+            _ => {}
+        },
         _ => {}
     }
 
@@ -244,7 +286,8 @@ async fn execute_ffmpeg(
 
     args.push(output.to_str().unwrap().to_string());
 
-    let output = app.shell()
+    let output = app
+        .shell()
         .sidecar("ffmpeg")
         .map_err(|e| format!("Failed to create FFmpeg sidecar: {}", e))?
         .args(args)
@@ -259,30 +302,23 @@ async fn execute_ffmpeg(
     }
 }
 
-async fn run_pandoc_conversion(app: &tauri::AppHandle, input: &Path, output: &Path) -> Result<(), String> {
-    let output = app.shell()
+async fn run_pandoc_conversion(
+    app: &tauri::AppHandle,
+    input: &Path,
+    output: &Path,
+) -> Result<(), String> {
+    let output = app
+        .shell()
         .sidecar("pandoc")
         .map_err(|e| format!("Failed to create Pandoc sidecar: {}", e))?
-        .args(vec![input.to_str().unwrap(), "-o", output.to_str().unwrap()])
+        .args(vec![
+            input.to_str().unwrap(),
+            "-o",
+            output.to_str().unwrap(),
+        ])
         .output()
         .await
         .map_err(|e| format!("Pandoc execution error: {}", e))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).to_string())
-    }
-}
-
-async fn run_svgo_optimization(app: &tauri::AppHandle, input: &Path, output: &Path) -> Result<(), String> {
-    let output = app.shell()
-        .sidecar("svgo")
-        .map_err(|e| format!("Failed to create SVGO sidecar: {}", e))?
-        .args(vec![input.to_str().unwrap(), "-o", output.to_str().unwrap()])
-        .output()
-        .await
-        .map_err(|e| format!("SVGO execution error: {}", e))?;
 
     if output.status.success() {
         Ok(())

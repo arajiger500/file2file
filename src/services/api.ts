@@ -54,20 +54,25 @@ async function handleUniversalEngine<T>(cmd: string, args?: Record<string, any>)
 
         try {
             // REAL HIGH-FIDELITY ROUTING
-            if (targetExt === "docx") {
+            const sourceExt = req.rawFile.name.split(".").pop()?.toLowerCase() || "";
+            const textSource = ["txt", "md", "html"].includes(sourceExt);
+
+            if (targetExt === "docx" && sourceExt === "pdf") {
                 finalBlob = await runRealPdfToDocx(req.rawFile);
-            } else if (["webp", "avif", "jpg", "png", "bmp", "ico", "tiff"].includes(targetExt)) {
+            } else if (["webp", "jpg", "png"].includes(targetExt) && req.rawFile.type.startsWith("image/")) {
                 finalBlob = await runRealImageTranscode(req.rawFile, targetExt);
             } else if (targetExt === "pdf") {
-                finalBlob = req.rawFile.type.startsWith("image/")
-                    ? await runImageToPdf(req.rawFile)
-                    : await runTextToPdf(req.rawFile);
-            } else if (["md", "txt", "html"].includes(targetExt)) {
+                if (req.rawFile.type.startsWith("image/")) {
+                    finalBlob = await runImageToPdf(req.rawFile);
+                } else if (textSource) {
+                    finalBlob = await runTextToPdf(req.rawFile);
+                } else {
+                    throw new Error("This browser conversion requires a plain-text or image source.");
+                }
+            } else if (["md", "txt", "html"].includes(targetExt) && textSource) {
                 finalBlob = new Blob([await runTextExtraction(req.rawFile, targetExt)], { type: targetExt === "html" ? "text/html" : "text/plain" });
             } else {
-                // Media formats are passed through as high-fidelity binary streams in browser mode
-                // In Desktop mode, FFmpeg handles the actual transcoding.
-                finalBlob = new Blob([await req.rawFile.arrayBuffer()], { type: `video/${targetExt}` });
+                throw new Error("This conversion requires the File2File desktop app and its local conversion tools.");
             }
         } catch (e) {
             return { success: false, error: String(e) } as unknown as T;
@@ -157,44 +162,26 @@ async function runTextExtraction(file: File, target: string): Promise<string> {
 function getFullFormatCatalog(ext: string): FormatOption[] {
     const isDoc = ["pdf", "docx", "doc", "md", "txt", "html", "epub", "rtf", "odt"].includes(ext);
     const isImg = ["png", "jpg", "jpeg", "webp", "avif", "bmp", "tiff", "ico", "heic", "tga", "psd"].includes(ext);
-    const isVid = ["mp4", "mkv", "mov", "avi", "webm", "flv", "wmv", "m4v", "ts", "3gp", "ogv", "vob"].includes(ext);
-    const isAud = ["mp3", "wav", "flac", "aac", "ogg", "m4a", "opus", "wma", "aiff"].includes(ext);
 
     const catalog: FormatOption[] = [];
 
     // DOCUMENTS (Real Conversions)
     if (isDoc) {
-        const docTargets = ["docx", "pdf", "md", "html", "txt", "rtf", "epub", "odt"];
+        const docTargets = ext === "pdf"
+            ? ["docx", "md", "html", "txt"]
+            : ["pdf", "md", "html", "txt"];
         docTargets.forEach(t => {
             if (t === ext) return;
-            catalog.push({ extension: t, name: `${t.toUpperCase()} Document`, category: "document", subcategory: "Universal", description: `Structural ${t.toUpperCase()} transcode`, is_lossless: true, is_recommended: true, recommended_for: ["Editing", "Publishing"], sidecar_engine: "Pro-Core", pros: ["Precise"], cons: [] });
+            catalog.push({ extension: t, name: `${t.toUpperCase()} Document`, category: "document", subcategory: "Universal", description: `Structural ${t.toUpperCase()} transcode`, comparison_note: null, is_lossless: true, is_recommended: true, recommended_for: ["Editing", "Publishing"], sidecar_engine: "Pro-Core", pros: ["Precise"], cons: [] });
         });
     }
 
     // IMAGES (Real Pixel Transcoding)
-    if (isImg || ext === "svg" || ext === "eps") {
-        const imgTargets = ["webp", "avif", "png", "jpg", "ico", "bmp", "tiff", "pdf", "tga"];
+    if (isImg || ext === "svg") {
+        const imgTargets = ["webp", "png", "jpg", "pdf"];
         imgTargets.forEach(t => {
             if (t === ext) return;
-            catalog.push({ extension: t, name: `${t.toUpperCase()} Image`, category: "image", subcategory: "Graphics", description: `Pixel-perfect ${t.toUpperCase()} encoding`, is_lossless: ["png", "bmp", "tiff"].includes(t), is_recommended: true, recommended_for: ["Web", "Design"], sidecar_engine: "Canvas-X", pros: ["Fast"], cons: [] });
-        });
-    }
-
-    // VIDEO (FFmpeg Native Power)
-    if (isVid) {
-        const vidTargets = ["mp4", "webm", "mkv", "mov", "avi", "gif", "mp3", "wav", "flac"];
-        vidTargets.forEach(t => {
-            if (t === ext) return;
-            catalog.push({ extension: t, name: `${t.toUpperCase()} Media`, category: t === "mp3" || t === "wav" || t === "flac" ? "audio" : "video", subcategory: "Broadcast", description: `Native FFmpeg ${t.toUpperCase()} pipeline`, is_lossless: false, is_recommended: true, recommended_for: ["All Devices"], sidecar_engine: "FFmpeg", pros: ["High FPS"], cons: [] });
-        });
-    }
-
-    // AUDIO (Pristine Extraction)
-    if (isAud) {
-        const audTargets = ["mp3", "wav", "flac", "aac", "ogg", "m4a", "opus"];
-        audTargets.forEach(t => {
-            if (t === ext) return;
-            catalog.push({ extension: t, name: `${t.toUpperCase()} Audio`, category: "audio", subcategory: "HiFi", description: `Accurate ${t.toUpperCase()} audio master`, is_lossless: ["flac", "wav"].includes(t), is_recommended: true, recommended_for: ["Music", "Editing"], sidecar_engine: "FFmpeg", pros: ["Zero Jitter"], cons: [] });
+            catalog.push({ extension: t, name: `${t.toUpperCase()} Image`, category: "image", subcategory: "Graphics", description: `Pixel-perfect ${t.toUpperCase()} encoding`, comparison_note: null, is_lossless: ["png", "bmp", "tiff"].includes(t), is_recommended: true, recommended_for: ["Web", "Design"], sidecar_engine: "Canvas-X", pros: ["Fast"], cons: [] });
         });
     }
 
