@@ -453,9 +453,9 @@ async fn run_data_conversion(
         ("json", "toml") => {
             let value: Value = serde_json::from_reader(reader)
                 .map_err(|e| format!("JSON parse error: {}", e))?;
-            let toml = toml::to_string_pretty(&value)
+            let toml_string = toml::to_string(&value)
                 .map_err(|e| format!("TOML serialization error: {}", e))?;
-            std::fs::write(output, toml).map_err(|e| format!("Failed to write output: {}", e))?;
+            std::fs::write(output, toml_string).map_err(|e| format!("Failed to write output: {}", e))?;
         }
         ("toml", "json") => {
             let content = std::fs::read_to_string(input)
