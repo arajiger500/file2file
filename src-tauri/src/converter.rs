@@ -33,8 +33,8 @@ pub struct ConversionResult {
     pub error: Option<String>,
 }
 
-pub async fn convert_single_file(
-    app: tauri::AppHandle,
+pub async fn convert_single_file<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     req: ConversionRequest,
 ) -> Result<ConversionResult, String> {
     let input_path = Path::new(&req.input_path);
@@ -60,6 +60,9 @@ pub async fn convert_single_file(
     };
 
     let target_ext = req.target_format.to_lowercase();
+    if !target_ext.chars().all(|c| c.is_alphanumeric()) {
+        return Err(format!("Invalid target format: {}", req.target_format));
+    }
     let output_filename = format!("{}_converted.{}", stem, target_ext);
     let output_path = out_dir.join(output_filename);
 
@@ -114,8 +117,8 @@ pub async fn convert_single_file(
     }
 }
 
-async fn run_pdf_conversion(
-    app: &tauri::AppHandle,
+async fn run_pdf_conversion<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     input: &Path,
     output: &Path,
     target_ext: &str,
@@ -123,11 +126,14 @@ async fn run_pdf_conversion(
     let out_dir = output.parent().unwrap_or_else(|| Path::new("."));
 
     let text_path = out_dir.join(format!(".file2file-{}.txt", Uuid::new_v4()));
+    let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
+    let text_path_str = text_path.to_str().ok_or("Temporary path contains invalid UTF-8")?;
+
     let extracted = app
         .shell()
         .sidecar("pdftotext")
         .map_err(|e| format!("Failed to create pdftotext sidecar: {}", e))?
-        .args(["-layout", input.to_str().unwrap(), text_path.to_str().unwrap()])
+        .args(["-layout", input_str, text_path_str])
         .output()
         .await
         .map_err(|_| "PDF conversion requires Poppler's pdftotext utility. Install poppler-utils and try again.".to_string())?;
@@ -150,16 +156,19 @@ async fn run_pdf_conversion(
     result
 }
 
-async fn run_image_magick_conversion(
-    app: &tauri::AppHandle,
+async fn run_image_magick_conversion<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     input: &Path,
     output: &Path,
 ) -> Result<(), String> {
+    let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
+    let output_str = output.to_str().ok_or("Output path contains invalid UTF-8")?;
+
     let result = app
         .shell()
         .sidecar("magick")
         .map_err(|e| format!("Failed to create ImageMagick sidecar: {}", e))?
-        .args([input.to_str().unwrap(), output.to_str().unwrap()])
+        .args([input_str, output_str])
         .output()
         .await
         .map_err(|_| {
@@ -173,8 +182,8 @@ async fn run_image_magick_conversion(
     }
 }
 
-async fn run_ffmpeg_conversion(
-    app: &tauri::AppHandle,
+async fn run_ffmpeg_conversion<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     req: &ConversionRequest,
     input: &Path,
     output: &Path,
@@ -189,18 +198,21 @@ async fn run_ffmpeg_conversion(
     execute_ffmpeg(app, req, input, output, target_ext, false).await
 }
 
-async fn execute_ffmpeg(
-    app: &tauri::AppHandle,
+async fn execute_ffmpeg<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     req: &ConversionRequest,
     input: &Path,
     output: &Path,
     target_ext: &str,
     use_hw: bool,
 ) -> Result<(), String> {
+    let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
+    let output_str = output.to_str().ok_or("Output path contains invalid UTF-8")?;
+
     let mut args = vec![
         "-y".to_string(),
         "-i".to_string(),
-        input.to_str().unwrap().to_string(),
+        input_str.to_string(),
     ];
 
     match target_ext {
@@ -303,7 +315,7 @@ async fn execute_ffmpeg(
         args.push("-1".to_string());
     }
 
-    args.push(output.to_str().unwrap().to_string());
+    args.push(output_str.to_string());
 
     let output = app
         .shell()
@@ -321,19 +333,22 @@ async fn execute_ffmpeg(
     }
 }
 
-async fn run_pandoc_conversion(
-    app: &tauri::AppHandle,
+async fn run_pandoc_conversion<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     input: &Path,
     output: &Path,
 ) -> Result<(), String> {
+    let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
+    let output_str = output.to_str().ok_or("Output path contains invalid UTF-8")?;
+
     let output = app
         .shell()
         .sidecar("pandoc")
         .map_err(|e| format!("Failed to create Pandoc sidecar: {}", e))?
         .args(vec![
-            input.to_str().unwrap(),
+            input_str,
             "-o",
-            output.to_str().unwrap(),
+            output_str,
         ])
         .output()
         .await
@@ -474,7 +489,10 @@ async fn run_archive_conversion(
             if input.is_dir() {
                 add_dir_to_zip(&mut zip, input, input, options)?;
             } else {
-                add_file_to_zip(&mut zip, input, input.file_name().unwrap().to_str().unwrap(), options)?;
+                let name = input.file_name()
+                    .and_then(|n| n.to_str())
+                    .ok_or("Invalid filename for zip")?;
+                add_file_to_zip(&mut zip, input, name, options)?;
             }
             zip.finish().map_err(|e| format!("Failed to finish zip: {}", e))?;
         }
@@ -529,9 +547,12 @@ fn add_dir_to_zip<W: io::Write + io::Seek>(
     options: zip::write::SimpleFileOptions,
 ) -> Result<(), String> {
     for entry in fs::read_dir(full_path).map_err(|e| format!("Failed to read directory: {}", e))? {
-        let entry = entry.unwrap();
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let path = entry.path();
-        let name = path.strip_prefix(base_path).unwrap().to_str().unwrap();
+        let name = path.strip_prefix(base_path)
+            .map_err(|e| format!("Prefix error: {}", e))?
+            .to_str()
+            .ok_or("Path contains invalid UTF-8")?;
 
         if path.is_dir() {
             add_dir_to_zip(zip, &path, base_path, options)?;
@@ -623,5 +644,29 @@ mod tests {
         assert!(extracted_file.exists());
         let content = fs::read_to_string(extracted_file).unwrap();
         assert_eq!(content, "hello world");
+    }
+
+    #[tokio::test]
+    async fn test_invalid_target_format() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("test.txt");
+        fs::write(&input_path, "test").unwrap();
+
+        let app = tauri::test::mock_app();
+        let req = ConversionRequest {
+            input_path: input_path.to_str().unwrap().to_string(),
+            output_dir: None,
+            target_format: "../evil".to_string(),
+            crf: None,
+            resolution: None,
+            hardware_accel: false,
+            selected_encoder: None,
+            strip_metadata: false,
+            audio_bitrate: None,
+        };
+        let result = convert_single_file(app.handle().clone(), req).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("Invalid target format"), "Expected 'Invalid target format', got: {}", err);
     }
 }

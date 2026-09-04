@@ -152,14 +152,40 @@ async function runTextExtraction(file: File, target: string): Promise<string> {
 
 async function runCsvToJson(file: File): Promise<string> {
     const text = await file.text();
-    const lines = text.split("\n").filter(l => l.trim());
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
     if (lines.length === 0) return "[]";
-    const headers = lines[0].split(",").map(h => h.trim());
+
+    // Naive CSV parser that handles basic quoted strings
+    const parseCsvLine = (line: string) => {
+        const result = [];
+        let current = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+                if (inQuotes && line[i + 1] === '"') {
+                    current += '"';
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = "";
+            } else {
+                current += char;
+            }
+        }
+        result.push(current.trim());
+        return result;
+    };
+
+    const headers = parseCsvLine(lines[0]);
     const data = lines.slice(1).map(line => {
-        const values = line.split(",").map(v => v.trim());
+        const values = parseCsvLine(line);
         const obj: any = {};
         headers.forEach((header, i) => {
-            obj[header] = values[i] || "";
+            if (header) obj[header] = values[i] || "";
         });
         return obj;
     });
@@ -170,10 +196,33 @@ async function runJsonToCsv(file: File): Promise<string> {
     const text = await file.text();
     const data = JSON.parse(text);
     if (!Array.isArray(data) || data.length === 0) return "";
-    const headers = Object.keys(data[0]);
+
+    // Collect all unique keys for headers
+    const headersSet = new Set<string>();
+    data.forEach(item => {
+        if (typeof item === 'object' && item !== null) {
+            Object.keys(item).forEach(k => headersSet.add(k));
+        }
+    });
+
+    const headers = Array.from(headersSet).sort();
+    if (headers.length === 0) return "";
+
     const csvLines = [
         headers.join(","),
-        ...data.map(item => headers.map(h => String(item[h] || "").replace(/,/g, " ")).join(","))
+        ...data.map(item => {
+            if (typeof item !== 'object' || item === null) return "";
+            return headers.map(h => {
+                const val = item[h];
+                if (val === undefined || val === null) return "";
+                const s = String(val);
+                // Basic escaping: replace quotes with double quotes and wrap in quotes if contains comma/newline/quote
+                if (s.includes(",") || s.includes("\n") || s.includes("\"")) {
+                    return `"${s.replace(/"/g, "\"\"")}"`;
+                }
+                return s;
+            }).join(",");
+        })
     ];
     return csvLines.join("\n");
 }
