@@ -231,7 +231,19 @@ pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
     catalog
 }
 
+pub fn get_smart_recommendations(input_ext: &str) -> Vec<FormatOption> {
+    let formats = get_compatible_formats(input_ext);
+    let mut recommendations: Vec<FormatOption> = formats.into_iter()
+        .filter(|f| f.is_recommended)
+        .collect();
+
+    // Sort by some priority if needed
+    recommendations.truncate(4);
+    recommendations
+}
+
 pub fn get_quick_presets() -> Vec<QuickPreset> {
+// ...
     vec![
         QuickPreset {
             id: "p1".to_string(),

@@ -42,22 +42,37 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
     };
 
     const processPaths = async (paths: string[]) => {
-        const { stat } = await import("@tauri-apps/plugin-fs");
-        const items = await Promise.all(paths.map(async (path): Promise<FileItem | null> => {
+        const { stat, readDir } = await import("@tauri-apps/plugin-fs");
+
+        const allFiles: FileItem[] = [];
+
+        const scan = async (path: string) => {
             const metadata = await stat(path);
-            const name = path.split(/[\\/]/).pop() || path;
-            const extension = metadata.isDirectory ? "directory" : (name.split(".").pop() || "");
-            return {
-                id: crypto.randomUUID(),
-                path,
-                name,
-                size: metadata.size,
-                extension,
-                category: metadata.isDirectory ? "archive" : detectCategory(extension),
-                status: "pending" as const,
-            };
-        }));
-        onAddFiles(items.filter((item): item is FileItem => item !== null));
+            if (metadata.isDirectory) {
+                const entries = await readDir(path);
+                for (const entry of entries) {
+                    await scan(`${path}/${entry.name}`);
+                }
+            } else {
+                const name = path.split(/[\\/]/).pop() || path;
+                const extension = name.split(".").pop() || "";
+                allFiles.push({
+                    id: crypto.randomUUID(),
+                    path,
+                    name,
+                    size: metadata.size,
+                    extension,
+                    category: detectCategory(extension),
+                    status: "pending" as const,
+                });
+            }
+        };
+
+        for (const path of paths) {
+            await scan(path);
+        }
+
+        onAddFiles(allFiles);
     };
 
     useEffect(() => {

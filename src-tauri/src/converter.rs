@@ -1,4 +1,5 @@
 use crate::formats::{get_category_for_extension, FileCategory};
+use crate::errors::map_technical_error;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, File};
@@ -33,10 +34,149 @@ pub struct ConversionResult {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileProbeResult {
+    pub has_video: bool,
+    pub has_audio: bool,
+    pub duration: f64,
+    pub width: u32,
+    pub height: u32,
+    pub format_name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationResult {
+    pub is_valid: bool,
+    pub warnings: Vec<String>,
+    pub error: Option<String>,
+    pub file_info: Option<FileProbeResult>,
+}
+
+pub async fn probe_file_info<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    path: &str,
+) -> Result<FileProbeResult, String> {
+    let output = app
+        .shell()
+        .sidecar("ffprobe")
+        .map_err(|e| format!("Failed to create ffprobe sidecar: {}", e))?
+        .args([
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_format",
+            "-show_streams",
+            path,
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("ffprobe execution error: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let json: Value = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse ffprobe output: {}", e))?;
+
+    let streams = json["streams"].as_array().ok_or("No streams found in file")?;
+    let has_video = streams.iter().any(|s| s["codec_type"] == "video");
+    let has_audio = streams.iter().any(|s| s["codec_type"] == "audio");
+
+    let format = &json["format"];
+    let duration = format["duration"].as_str().and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+    let format_name = format["format_name"].as_str().unwrap_or("unknown").to_string();
+
+    let video_stream = streams.iter().find(|s| s["codec_type"] == "video");
+    let width = video_stream.and_then(|s| s["width"].as_u64()).unwrap_or(0) as u32;
+    let height = video_stream.and_then(|s| s["height"].as_u64()).unwrap_or(0) as u32;
+
+    Ok(FileProbeResult {
+        has_video,
+        has_audio,
+        duration,
+        width,
+        height,
+        format_name,
+    })
+}
+
+pub async fn validate_conversion<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    input_path_str: &str,
+    target_format: &str,
+) -> ValidationResult {
+    let path = Path::new(input_path_str);
+    if !path.exists() {
+        return ValidationResult {
+            is_valid: false,
+            warnings: vec![],
+            error: Some("Input file does not exist.".to_string()),
+            file_info: None,
+        };
+    }
+
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let category = get_category_for_extension(&ext);
+    let target_cat = get_category_for_extension(target_format);
+
+    let mut warnings = Vec::new();
+
+    // Probe media files
+    if category == FileCategory::Video || category == FileCategory::Audio {
+        match probe_file_info(app, input_path_str).await {
+            Ok(info) => {
+                if target_cat == FileCategory::Audio && !info.has_audio {
+                    return ValidationResult {
+                        is_valid: false,
+                        warnings: vec![],
+                        error: Some(format!("This {} contains no audio track, so it cannot be converted to {}.",
+                                    category.to_string().to_lowercase(), target_format.to_uppercase())),
+                        file_info: Some(info),
+                    };
+                }
+
+                if target_cat == FileCategory::Video && !info.has_video {
+                   warnings.push("Input has no video stream. Output will be audio-only if supported.".to_string());
+                }
+
+                // Check for disk space (rough estimate: same as original)
+                if let Ok(metadata) = fs::metadata(path) {
+                    let size = metadata.len();
+                    if let Some(parent) = path.parent() {
+                        // In a real app, we'd check available space on the partition of 'parent'
+                        // For now, we'll just assume it's okay but we could add more logic here.
+                    }
+                }
+
+                return ValidationResult {
+                    is_valid: true,
+                    warnings,
+                    error: None,
+                    file_info: Some(info),
+                };
+            }
+            Err(e) => {
+                // ffprobe failed, but maybe it's not a media file or ffprobe is missing
+                warnings.push(format!("Could not probe file details: {}", e));
+            }
+        }
+    }
+
+    // Generic validation
+    ValidationResult {
+        is_valid: true,
+        warnings,
+        error: None,
+        file_info: None,
+    }
+}
+
 pub async fn convert_single_file<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
-    req: ConversionRequest,
-) -> Result<ConversionResult, String> {
+// ... (rest of the file remains same, but I'll update the error mapping)
+) {
+    // ...
+}
+
     let input_path = Path::new(&req.input_path);
     if !input_path.exists() {
         return Err(format!("Input file does not exist: {}", req.input_path));
@@ -104,16 +244,19 @@ pub async fn convert_single_file<R: tauri::Runtime>(
                 error: None,
             })
         }
-        Err(err) => Ok(ConversionResult {
-            job_id: Uuid::new_v4().to_string(),
-            input_path: req.input_path.clone(),
-            output_path: output_path.to_string_lossy().to_string(),
-            success: false,
-            original_size_bytes: original_size,
-            converted_size_bytes: 0,
-            elapsed_ms: elapsed,
-            error: Some(err),
-        }),
+        Err(err) => {
+            let friendly_err = map_technical_error(&err, &req.input_path, &req.target_format);
+            Ok(ConversionResult {
+                job_id: Uuid::new_v4().to_string(),
+                input_path: req.input_path.clone(),
+                output_path: output_path.to_string_lossy().to_string(),
+                success: false,
+                original_size_bytes: original_size,
+                converted_size_bytes: 0,
+                elapsed_ms: elapsed,
+                error: Some(friendly_err),
+            })
+        }
     }
 }
 

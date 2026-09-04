@@ -26,6 +26,7 @@ export interface BinaryStatus {
 
 export interface SidecarHealthReport {
     ffmpeg: BinaryStatus;
+    ffprobe: BinaryStatus;
     pandoc: BinaryStatus;
     imagemagick: BinaryStatus;
     pdftotext: BinaryStatus;
@@ -103,4 +104,20 @@ export interface ConversionResult {
     elapsed_ms: number;
     download_url?: string;
     error?: string;
+}
+
+export interface FileProbeResult {
+    has_video: boolean;
+    has_audio: boolean;
+    duration: number;
+    width: number;
+    height: number;
+    format_name: string;
+}
+
+export interface ValidationResult {
+    is_valid: boolean;
+    warnings: string[];
+    error: string | null;
+    file_info: FileProbeResult | null;
 }

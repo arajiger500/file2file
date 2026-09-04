@@ -6,6 +6,7 @@ import { ConversionStudio } from "./components/ConversionStudio";
 import { AdvancedSettingsDrawer } from "./components/AdvancedSettingsDrawer";
 import { QuickConverters } from "./components/QuickConverters";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { DiagnosticModal } from "./components/DiagnosticModal";
 import { api } from "./services/api";
 import {
     FileItem,
@@ -29,6 +30,7 @@ export function App() {
     const [availableFormats, setAvailableFormats] = useState<FormatOption[]>([]);
     const [selectedFormatOption, setSelectedFormatOption] = useState<FormatOption | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+    const [isDiagnosticOpen, setIsDiagnosticOpen] = useState<boolean>(false);
     const [history, setHistory] = useState<ConversionResult[]>([]);
 
     const [settings, setSettings] = useState<AdvancedSettings>({
@@ -89,6 +91,7 @@ export function App() {
                 isSettingsOpen={isSettingsOpen}
                 onToggleSettings={() => setIsSettingsOpen(!isSettingsOpen)}
                 onRefreshHardware={loadSystemData}
+                onOpenDiagnostics={() => setIsDiagnosticOpen(true)}
             />
 
             <main className="flex-1 w-full max-w-[1400px] mx-auto px-6 py-8">
@@ -96,8 +99,8 @@ export function App() {
                     <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
                         <div className="xl:col-span-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                             <div className="space-y-2">
-                                <h2 className="text-4xl font-bold tracking-tight text-white">Universal Transcoder</h2>
-                                <p className="text-zinc-400 text-lg">High-fidelity conversions for any workflow.</p>
+                                <h2 className="text-4xl font-bold tracking-tight text-white uppercase tracking-tighter">Universal Engine</h2>
+                                <p className="text-zinc-400 text-lg">High-fidelity conversions. No data leaves your machine.</p>
                             </div>
 
                             <QuickConverters
@@ -118,7 +121,7 @@ export function App() {
                         </div>
 
                         <div className="xl:col-span-4 space-y-6">
-                            <div className="glass-card p-6 space-y-5 bg-gradient-to-br from-zinc-900/80 to-zinc-950/80">
+                            <div className="glass-card p-6 space-y-5 bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border-zinc-800">
                                 <div className="flex items-center gap-3 text-zinc-100">
                                     <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
                                         <Shield className="w-5 h-5 text-blue-400" />
@@ -165,6 +168,7 @@ export function App() {
                             files={files}
                             format={selectedFormatOption}
                             settings={settings}
+                            hardware={hardware}
                             onBackToFormats={() => setCurrentStep("select-format")}
                             onResetToUpload={() => { setFiles([]); setCurrentStep("upload"); }}
                             onUpdateFileStatus={handleUpdateFileStatus}
@@ -179,6 +183,12 @@ export function App() {
                 settings={settings}
                 onChangeSettings={setSettings}
                 hardware={hardware}
+            />
+
+            <DiagnosticModal
+                isOpen={isDiagnosticOpen}
+                onClose={() => setIsDiagnosticOpen(false)}
+                sidecars={sidecars}
             />
         </div>
     );

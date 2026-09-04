@@ -12,6 +12,7 @@ pub struct BinaryStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SidecarHealthReport {
     pub ffmpeg: BinaryStatus,
+    pub ffprobe: BinaryStatus,
     pub pandoc: BinaryStatus,
     pub imagemagick: BinaryStatus,
     pub pdftotext: BinaryStatus,
@@ -72,15 +73,17 @@ pub async fn probe_sidecar(
 
 pub async fn check_sidecar_health(app: &tauri::AppHandle) -> SidecarHealthReport {
     let ffmpeg = probe_sidecar(app, "ffmpeg", "-version").await;
+    let ffprobe = probe_sidecar(app, "ffprobe", "-version").await;
     let pandoc = probe_sidecar(app, "pandoc", "--version").await;
     let imagemagick = probe_sidecar(app, "magick", "--version").await;
     let pdftotext = probe_sidecar(app, "pdftotext", "-v").await;
 
     let all_ready =
-        ffmpeg.available && pandoc.available && imagemagick.available && pdftotext.available;
+        ffmpeg.available && ffprobe.available && pandoc.available && imagemagick.available && pdftotext.available;
 
     SidecarHealthReport {
         ffmpeg,
+        ffprobe,
         pandoc,
         imagemagick,
         pdftotext,

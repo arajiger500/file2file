@@ -2,10 +2,12 @@ pub mod converter;
 pub mod formats;
 pub mod hardware;
 pub mod sidecar;
+pub mod errors;
 
 mod commands {
     use super::*;
     use tauri::AppHandle;
+    use converter::{ValidationResult};
 
     #[tauri::command]
     pub async fn detect_hardware(app: AppHandle) -> HardwareInfo {
@@ -18,6 +20,11 @@ mod commands {
     }
 
     #[tauri::command]
+    pub fn get_smart_suggestions(input_ext: String) -> Vec<FormatOption> {
+        formats::get_smart_recommendations(&input_ext)
+    }
+
+    #[tauri::command]
     pub fn get_presets() -> Vec<QuickPreset> {
         get_quick_presets()
     }
@@ -25,6 +32,15 @@ mod commands {
     #[tauri::command]
     pub async fn check_sidecars(app: AppHandle) -> SidecarHealthReport {
         check_sidecar_health(&app).await
+    }
+
+    #[tauri::command]
+    pub async fn validate_job(
+        app: AppHandle,
+        input_path: String,
+        target_format: String,
+    ) -> ValidationResult {
+        converter::validate_conversion(&app, &input_path, &target_format).await
     }
 
     #[tauri::command]
@@ -68,8 +84,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::detect_hardware,
             commands::get_compatible_targets,
+            commands::get_smart_suggestions,
             commands::get_presets,
             commands::check_sidecars,
+            commands::validate_job,
             commands::start_conversion,
             commands::copy_file,
             commands::write_base64_file,

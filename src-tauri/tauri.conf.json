@@ -35,6 +35,7 @@
         ],
         "externalBin": [
             "binaries/ffmpeg",
+            "binaries/ffprobe",
             "binaries/pandoc",
             "binaries/magick",
             "binaries/pdftotext"

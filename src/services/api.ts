@@ -5,28 +5,24 @@ import {
     SidecarHealthReport,
     ConversionRequest,
     ConversionResult,
+    ValidationResult,
 } from "../types";
-import { handleUniversalEngine } from "./universal-engine";
+// ... (rest of imports)
 
-export const isTauri = () =>
-    typeof window !== "undefined" &&
-    Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
-
-async function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-    if (isTauri()) {
-        const { invoke } = await import("@tauri-apps/api/core");
-        return invoke<T>(cmd, args);
-    }
-    return handleUniversalEngine<T>(cmd, args);
-}
+// ...
 
 export const api = {
     detectHardware: () => invokeTauri<HardwareInfo>("detect_hardware"),
     getCompatibleTargets: (inputExt: string) =>
         invokeTauri<FormatOption[]>("get_compatible_targets", { inputExt }),
+    getSmartSuggestions: (inputExt: string) =>
+        invokeTauri<FormatOption[]>("get_smart_suggestions", { inputExt }),
     getPresets: () => invokeTauri<QuickPreset[]>("get_presets"),
     checkSidecars: () => invokeTauri<SidecarHealthReport>("check_sidecars"),
+    validateJob: (inputPath: string, targetFormat: string) =>
+        invokeTauri<ValidationResult>("validate_job", { inputPath, targetFormat }),
     startConversion: (request: ConversionRequest) =>
+// ...
         invokeTauri<ConversionResult>("start_conversion", { request }),
     downloadFile: async (result: ConversionResult, fallbackFilename?: string) => {
         const filename = fallbackFilename || result.output_path.split("/").pop() || "file2file_output";

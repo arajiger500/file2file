@@ -9,6 +9,7 @@ interface HeaderProps {
     onToggleSettings: () => void;
     isSettingsOpen: boolean;
     onRefreshHardware: () => void;
+    onOpenDiagnostics: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
     onToggleSettings,
     isSettingsOpen,
     onRefreshHardware,
+    onOpenDiagnostics,
 }) => {
     const appVersion = appPackage.version || "0.1.0";
 
@@ -42,11 +44,12 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-3">
                 {/* Sidecar status pill */}
                 <div
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-surface-raised border border-border text-slate-300"
-                    title="Conversion tools: FFmpeg, Pandoc, ImageMagick, and Poppler"
+                    onClick={onOpenDiagnostics}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-surface-raised border border-border text-slate-300 cursor-pointer hover:border-zinc-600 transition-colors"
+                    title={sidecars?.all_ready ? "All conversion engines are ready for high-performance processing." : "Some engines are missing. Click for diagnostics."}
                 >
                     <ShieldCheck className={`w-3.5 h-3.5 ${sidecars?.all_ready ? "text-emerald-400" : "text-amber-400"}`} />
-                    <span className="font-medium">Tools: {sidecars?.all_ready ? "Active" : "Needs setup"}</span>
+                    <span className="font-medium">{sidecars?.all_ready ? "Engines Ready" : "Limited Engine Mode"}</span>
                 </div>
 
                 {/* Hardware acceleration badge */}
