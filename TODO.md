@@ -76,8 +76,12 @@
 - [ ] 60. Subtitle extraction (SRT from MKV)
 
 ## UI & UX
+- [x] Implement human-friendly error mapping (errors.rs).
+- [x] Implement intelligent pre-flight validation (converter.rs).
+- [x] Add engine health diagnostic dashboard (DiagnosticModal.tsx).
+- [x] Add 'Limited Engine Mode' for missing sidecar resilience.
 - [ ] Audit UI responsiveness under load.
-- [ ] Improve error reporting in the UI.
+- [x] Improve error reporting in the UI.
 
 ## Testing
 - [ ] Establish Rust integration test suite.
