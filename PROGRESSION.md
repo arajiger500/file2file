@@ -28,6 +28,13 @@
     - Fixed "serializing maps is not supported" error in JSON-CSV conversion.
     - Fixed potential OOM crash in Zip archiving.
     - Fixed potential backend crash in Zip extraction.
+- **Security Improvements:**
+    - Added alphanumeric sanitization for `target_format` to prevent path traversal.
+    - Replaced unsafe `.unwrap()` on file paths with proper UTF-8 validation and error propagation.
+    - Updated `converter.rs` to be generic over `tauri::Runtime` for better testability with `MockRuntime`.
+- **Browser-Side Fixes:**
+    - Fixed naive JSON-CSV conversion in `universal-engine.ts` (now handles mixed keys and escaping).
+    - Improved CSV-JSON parsing in `universal-engine.ts` to handle basic quoted fields.
 - **Next Actions:**
-    - Audit security of file path handling and shell execution.
+    - Audit security of shell execution (Pandoc/FFmpeg/ImageMagick sidecar configs).
     - Implement PDF to DOCX improvements.
