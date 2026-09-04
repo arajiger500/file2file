@@ -17,6 +17,8 @@ const detectCategory = (ext: string): FileCategory => {
     if (["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "tiff", "ico", "heic", "tga", "psd"].includes(e)) return "image";
     if (["pdf", "docx", "doc", "md", "html", "txt", "epub", "rtf", "odt"].includes(e)) return "document";
     if (["svg", "eps", "ai"].includes(e)) return "vector";
+    if (["zip", "tar", "gz", "7z", "rar", "directory"].includes(e)) return "archive";
+    if (["csv", "json", "xlsx", "xls", "yaml", "xml", "toml", "sql"].includes(e)) return "data";
     return "unknown";
 };
 
@@ -43,16 +45,15 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
         const { stat } = await import("@tauri-apps/plugin-fs");
         const items = await Promise.all(paths.map(async (path): Promise<FileItem | null> => {
             const metadata = await stat(path);
-            if (metadata.isDirectory) return null;
             const name = path.split(/[\\/]/).pop() || path;
-            const extension = name.split(".").pop() || "";
+            const extension = metadata.isDirectory ? "directory" : (name.split(".").pop() || "");
             return {
                 id: crypto.randomUUID(),
                 path,
                 name,
                 size: metadata.size,
                 extension,
-                category: detectCategory(extension),
+                category: metadata.isDirectory ? "archive" : detectCategory(extension),
                 status: "pending" as const,
             };
         }));

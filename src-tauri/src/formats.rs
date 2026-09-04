@@ -55,7 +55,7 @@ pub fn get_category_for_extension(ext: &str) -> FileCategory {
         }
         "svg" | "eps" | "ai" => FileCategory::Vector,
         "csv" | "json" | "xlsx" | "xls" | "yaml" | "xml" | "toml" | "sql" => FileCategory::Data,
-        "zip" | "tar" | "gz" | "7z" | "rar" => FileCategory::Archive,
+        "zip" | "tar" | "gz" | "7z" | "rar" | "directory" => FileCategory::Archive,
         _ => FileCategory::Unknown,
     }
 }
