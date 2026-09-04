@@ -1,13 +1,14 @@
-# Autonomous Execution Roadmap: Omni-Format Converter & UI Hardening
+# Priority TODO List
 
-## Phase 1: Core Architecture & Non-Generic UI Design
-- [ ] Initialize Tauri 2.0 + React + Tailwind project structure with zero generic template styling (no boilerplate purple gradients, no standard rounded-xl cards with default padding).
-- [ ] Implement custom high-performance dark-mode design system with raw structural layouts, sharp borders, monospace data readouts, and immediate layout response.
-- [ ] Build global drag-and-drop ingestion zone with multi-file batch queue management.
-- [ ] Construct live logging output console with real-time stream buffering from Rust backend workers.
+## Core Infrastructure
+- [x] Verify build health (`npm run build`, `cargo check`).
+- [x] Audit current hardware acceleration detection (Updated to use sidecar).
+- [ ] Audit security of file path handling and shell execution.
+- [x] Ensure all binaries (magick, pdftotext) are handled as sidecars.
 
-## Phase 2: Document Conversions (1 to 15)
-- [ ] 1. PDF to DOCX (using native Rust bindings)
+## Conversion Implementation
+### Phase 2: Document Conversions (1 to 15)
+- [ ] 1. PDF to DOCX
 - [ ] 2. DOCX to PDF
 - [ ] 3. PDF to TXT
 - [ ] 4. PDF to HTML
@@ -21,32 +22,32 @@
 - [ ] 12. DOCX to TXT
 - [ ] 13. ODT to PDF
 - [ ] 14. ODT to DOCX
-- [ ] 15. CSV to JSON
+- [x] 15. CSV to JSON (Implemented via Rust native)
 
-## Phase 3: Data, Spreadsheet & Structured Conversions (16 to 30)
+### Phase 3: Data, Spreadsheet & Structured Conversions (16 to 30)
 - [ ] 16. CSV to XLSX
 - [ ] 17. XLSX to CSV
 - [ ] 18. XLSX to JSON
-- [ ] 19. JSON to CSV
-- [ ] 20. JSON to YAML
-- [ ] 21. YAML to JSON
+- [x] 19. JSON to CSV
+- [x] 20. JSON to YAML
+- [x] 21. YAML to JSON
 - [ ] 22. XML to JSON
 - [ ] 23. JSON to XML
-- [ ] 24. TOML to JSON
-- [ ] 25. JSON to TOML
+- [x] 24. TOML to JSON
+- [x] 25. JSON to TOML
 - [ ] 26. SQLite DB to JSON dump
 - [ ] 27. CSV to SQL Insert statements
 - [ ] 28. Log file to structured JSON
 - [ ] 29. BibTeX to JSON
 - [ ] 30. ICS Calendar to JSON
 
-## Phase 4: Image & Raster Graphics Conversions (31 to 45)
-- [ ] 31. PNG to JPEG
-- [ ] 32. JPEG to PNG
-- [ ] 33. PNG to WebP
-- [ ] 34. WebP to PNG
-- [ ] 35. PNG to AVIF
-- [ ] 36. AVIF to PNG
+### Phase 4: Image & Raster Graphics Conversions (31 to 45)
+- [x] 31. PNG to JPEG (Via ImageMagick)
+- [x] 32. JPEG to PNG (Via ImageMagick)
+- [x] 33. PNG to WebP (Via ImageMagick)
+- [x] 34. WebP to PNG (Via ImageMagick)
+- [x] 35. PNG to AVIF (Via ImageMagick)
+- [x] 36. AVIF to PNG (Via ImageMagick)
 - [ ] 37. SVG to PNG (rasterization)
 - [ ] 38. HEIC to JPEG
 - [ ] 39. TIFF to PNG
@@ -57,39 +58,27 @@
 - [ ] 44. PSD thumbnail extraction to PNG
 - [ ] 45. SVG to optimized minimal SVG
 
-## Phase 5: Audio, Video & Multimedia Conversions (46 to 60+)
-- [ ] 46. MP4 to MKV
-- [ ] 47. MKV to MP4 (remuxing)
-- [ ] 48. AVI to MP4
-- [ ] 49. MOV to MP4
-- [ ] 50. WebM to MP4
-- [ ] 51. MP4 to GIF (with custom framerate and scaling)
-- [ ] 52. MP3 to WAV
-- [ ] 53. WAV to MP3 (variable bitrate)
-- [ ] 54. FLAC to MP3
-- [ ] 55. AAC to MP3
-- [ ] 56. OGG to WAV
-- [ ] 57. M4A to MP3
+### Phase 5: Audio, Video & Multimedia Conversions (46 to 60+)
+- [x] 46. MP4 to MKV (Via FFmpeg)
+- [x] 47. MKV to MP4 (Via FFmpeg remuxing)
+- [x] 48. AVI to MP4 (Via FFmpeg)
+- [x] 49. MOV to MP4 (Via FFmpeg)
+- [x] 50. WebM to MP4 (Via FFmpeg)
+- [x] 51. MP4 to GIF (Implemented in converter.rs)
+- [x] 52. MP3 to WAV (Via FFmpeg)
+- [x] 53. WAV to MP3 (Via FFmpeg)
+- [x] 54. FLAC to MP3 (Via FFmpeg)
+- [x] 55. AAC to MP3 (Via FFmpeg)
+- [x] 56. OGG to WAV (Via FFmpeg)
+- [x] 57. M4A to MP3 (Via FFmpeg)
 - [ ] 58. Extract audio track from MP4 to FLAC
-- [ ] 59. Video mute (strip audio stream)
+- [x] 59. Video mute (strip audio stream - Implemented via strip_metadata/settings)
 - [ ] 60. Subtitle extraction (SRT from MKV)
 
-## Phase 6: Automated Verification & Unit Testing
-- [ ] Write integration test suite in Rust (`cargo test`) covering edge cases for all 60+ conversion pipelines (malformed files, zero-byte inputs, extreme resolution bounds).
-- [ ] Execute programmatic frontend component verification via testing libraries to ensure UI element rendering integrity and state synchronization.
-- [ ] Perform headless batch load testing simulating simultaneous multi-threaded execution across all format parsers.
+## UI & UX
+- [ ] Audit UI responsiveness under load.
+- [ ] Improve error reporting in the UI.
 
-## Phase 7: UI Stress Testing & UX Validation
-- [ ] Test UI responsiveness under heavy multi-gigabyte conversion queues to prevent main-thread freezing.
-- [ ] Validate layout scaling across atypical window sizes and DPI multipliers.
-- [ ] Inspect error state presentation to verify that backend panics or non-zero exit codes surface cleanly in the UI terminal stream without crashing the app.
-
-## Phase 8: Adversarial Bug Hunting & Automated Patching
-- [ ] Inject malformed headers, truncated files, and malicious payload structures into conversion handlers to expose segmentation faults and unhandled Rust `Result`/`Option` types.
-- [ ] Automatically patch discovered memory leaks, thread lockups, and unhandled exceptions in Rust backend modules.
-- [ ] Run full regression suite (`cargo test && npm test`) to confirm zero regressions after bug fixes.
-
-## Phase 9: Final Packaging & Long-Term Persistence Loop
-- [ ] Compile optimized release binary via Tauri compiler bundle.
-- [ ] Write immutable session audit log to `PROGRESS.md` detailing every conversion module built, test executed, and bug squashed.
-- [ ] Keep agent loop running continuously to monitor repository state, optimize performance bottlenecks, and expand utility features indefinitely.
+## Testing
+- [ ] Establish Rust integration test suite.
+- [ ] Establish Vitest/React Testing Library setup for frontend.
