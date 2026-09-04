@@ -7,9 +7,19 @@ import {
     ConversionResult,
     ValidationResult,
 } from "../types";
-// ... (rest of imports)
+import { handleUniversalEngine } from "./universal-engine";
 
-// ...
+export const isTauri = () =>
+    typeof window !== "undefined" &&
+    Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+
+async function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+    if (isTauri()) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        return invoke<T>(cmd, args);
+    }
+    return handleUniversalEngine<T>(cmd, args);
+}
 
 export const api = {
     detectHardware: () => invokeTauri<HardwareInfo>("detect_hardware"),
@@ -22,7 +32,6 @@ export const api = {
     validateJob: (inputPath: string, targetFormat: string) =>
         invokeTauri<ValidationResult>("validate_job", { inputPath, targetFormat }),
     startConversion: (request: ConversionRequest) =>
-// ...
         invokeTauri<ConversionResult>("start_conversion", { request }),
     downloadFile: async (result: ConversionResult, fallbackFilename?: string) => {
         const filename = fallbackFilename || result.output_path.split("/").pop() || "file2file_output";
@@ -36,7 +45,9 @@ export const api = {
                 // @ts-ignore
                 const { open } = await import("@tauri-apps/plugin-shell");
                 await open(savePath);
-            } catch (e) { console.error("Save error:", e); }
+            } catch (e) {
+                console.error("Save error:", e);
+            }
             return;
         }
         if (result.download_url) {

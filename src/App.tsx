@@ -17,7 +17,7 @@ import {
     AdvancedSettings,
     ConversionResult,
 } from "./types";
-import { Shield, Zap, Globe } from "lucide-react";
+import { Shield, Zap, Globe, ArrowRight } from "lucide-react";
 
 type AppStep = "upload" | "select-format" | "convert-box";
 
@@ -67,7 +67,7 @@ export function App() {
         try {
             const formats = await api.getCompatibleTargets(newFiles[0].extension);
             setAvailableFormats(formats);
-            setCurrentStep("select-format");
+            // We no longer auto-navigate to allow smart suggestions on the same page
         } catch (err) {
             console.error("Format fetch error:", err);
         }
@@ -108,7 +108,7 @@ export function App() {
                                 onSelectPreset={async (p) => {
                                     const formats = await api.getCompatibleTargets(p.to_format);
                                     setAvailableFormats(formats);
-                                    handleSelectFormat(formats.find(f => f.extension === p.to_format) || formats[0]);
+                                    handleSelectFormat(formats.find((f: FormatOption) => f.extension === p.to_format) || formats[0]);
                                 }}
                             />
 
@@ -117,7 +117,20 @@ export function App() {
                                 onAddFiles={handleAddFiles}
                                 onRemoveFile={(id) => setFiles(files.filter(f => f.id !== id))}
                                 onClearFiles={() => setFiles([])}
+                                onDirectConvert={handleSelectFormat}
                             />
+
+                            {files.length > 0 && (
+                                <div className="flex justify-center animate-in fade-in zoom-in duration-500">
+                                    <button
+                                        onClick={() => setCurrentStep("select-format")}
+                                        className="group px-8 py-4 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-blue-500/50 text-white font-bold uppercase tracking-widest text-sm flex items-center gap-3 transition-all hover:bg-zinc-800"
+                                    >
+                                        <span>Explore All 100+ Formats</span>
+                                        <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div className="xl:col-span-4 space-y-6">

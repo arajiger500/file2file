@@ -19,6 +19,36 @@ pub struct SidecarHealthReport {
     pub all_ready: bool,
 }
 
+fn parse_version(output: &str, cmd: &str) -> String {
+    let first_line = output.lines().next().unwrap_or("Available");
+    match cmd {
+        "ffmpeg" | "ffprobe" => {
+            first_line
+                .split("version ")
+                .nth(1)
+                .and_then(|s| s.split_whitespace().next())
+                .unwrap_or(first_line)
+                .to_string()
+        }
+        "magick" => {
+            first_line
+                .split("ImageMagick ")
+                .nth(1)
+                .and_then(|s| s.split_whitespace().next())
+                .unwrap_or(first_line)
+                .to_string()
+        }
+        "pandoc" => {
+            first_line
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or(first_line)
+                .to_string()
+        }
+        _ => first_line.to_string(),
+    }
+}
+
 pub async fn probe_sidecar(
     app: &tauri::AppHandle,
     cmd_name: &str,
@@ -30,11 +60,11 @@ pub async fn probe_sidecar(
             match output {
                 Ok(out) if out.status.success() => {
                     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-                    let first_line = stdout.lines().next().unwrap_or("Available").to_string();
+                    let version = parse_version(&stdout, cmd_name);
                     BinaryStatus {
                         name: cmd_name.to_string(),
                         available: true,
-                        version: Some(first_line),
+                        version: Some(version),
                         path_or_sidecar: "bundled".to_string(),
                     }
                 }
@@ -52,11 +82,11 @@ pub async fn probe_sidecar(
             match output {
                 Ok(out) if out.status.success() => {
                     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-                    let first_line = stdout.lines().next().unwrap_or("Available").to_string();
+                    let version = parse_version(&stdout, cmd_name);
                     BinaryStatus {
                         name: cmd_name.to_string(),
                         available: true,
-                        version: Some(first_line),
+                        version: Some(version),
                         path_or_sidecar: "system_path".to_string(),
                     }
                 }

@@ -13,6 +13,22 @@ pub enum FileCategory {
     Unknown,
 }
 
+impl std::fmt::Display for FileCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            FileCategory::Video => "Video",
+            FileCategory::Audio => "Audio",
+            FileCategory::Image => "Image",
+            FileCategory::Document => "Document",
+            FileCategory::Vector => "Vector",
+            FileCategory::Data => "Data",
+            FileCategory::Archive => "Archive",
+            FileCategory::Unknown => "File",
+        };
+        write!(f, "{}", s)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormatOption {
     pub extension: String,
@@ -232,14 +248,42 @@ pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
 }
 
 pub fn get_smart_recommendations(input_ext: &str) -> Vec<FormatOption> {
+    let category = get_category_for_extension(input_ext);
     let formats = get_compatible_formats(input_ext);
-    let mut recommendations: Vec<FormatOption> = formats.into_iter()
-        .filter(|f| f.is_recommended)
-        .collect();
 
-    // Sort by some priority if needed
-    recommendations.truncate(4);
-    recommendations
+    let priority_list = match category {
+        FileCategory::Video => vec!["mp4", "webm", "mp3", "gif"],
+        FileCategory::Audio => vec!["mp3", "wav", "flac", "m4a"],
+        FileCategory::Image | FileCategory::Vector => vec!["webp", "png", "jpg", "pdf"],
+        FileCategory::Document => vec!["pdf", "docx", "txt", "html"],
+        FileCategory::Data => vec!["json", "csv", "yaml", "xml"],
+        FileCategory::Archive => vec!["zip", "folder"],
+        _ => vec![],
+    };
+
+    let mut recommended = Vec::new();
+
+    // First, pick from the priority list in order
+    for ext in priority_list {
+        if let Some(f) = formats.iter().find(|f| f.extension == ext) {
+            recommended.push(f.clone());
+        }
+    }
+
+    // If we have fewer than 4, fill with other recommended formats
+    if recommended.len() < 4 {
+        for f in formats {
+            if f.is_recommended && !recommended.iter().any(|r| r.extension == f.extension) {
+                recommended.push(f);
+                if recommended.len() >= 4 {
+                    break;
+                }
+            }
+        }
+    }
+
+    recommended.truncate(4);
+    recommended
 }
 
 pub fn get_quick_presets() -> Vec<QuickPreset> {

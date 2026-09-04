@@ -1,5 +1,5 @@
-use crate::formats::{get_category_for_extension, FileCategory};
 use crate::errors::map_technical_error;
+use crate::formats::{get_category_for_extension, FileCategory};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, File};
@@ -61,8 +61,10 @@ pub async fn probe_file_info<R: tauri::Runtime>(
         .sidecar("ffprobe")
         .map_err(|e| format!("Failed to create ffprobe sidecar: {}", e))?
         .args([
-            "-v", "quiet",
-            "-print_format", "json",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
             "-show_format",
             "-show_streams",
             path,
@@ -83,12 +85,20 @@ pub async fn probe_file_info<R: tauri::Runtime>(
     let has_audio = streams.iter().any(|s| s["codec_type"] == "audio");
 
     let format = &json["format"];
-    let duration = format["duration"].as_str().and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
-    let format_name = format["format_name"].as_str().unwrap_or("unknown").to_string();
+    let duration = format["duration"]
+        .as_str()
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(0.0);
+    let format_name = format["format_name"]
+        .as_str()
+        .unwrap_or("unknown")
+        .to_string();
 
     let video_stream = streams.iter().find(|s| s["codec_type"] == "video");
     let width = video_stream.and_then(|s| s["width"].as_u64()).unwrap_or(0) as u32;
-    let height = video_stream.and_then(|s| s["height"].as_u64()).unwrap_or(0) as u32;
+    let height = video_stream
+        .and_then(|s| s["height"].as_u64())
+        .unwrap_or(0) as u32;
 
     Ok(FileProbeResult {
         has_video,
@@ -115,7 +125,11 @@ pub async fn validate_conversion<R: tauri::Runtime>(
         };
     }
 
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
     let category = get_category_for_extension(&ext);
     let target_cat = get_category_for_extension(target_format);
 
@@ -129,23 +143,20 @@ pub async fn validate_conversion<R: tauri::Runtime>(
                     return ValidationResult {
                         is_valid: false,
                         warnings: vec![],
-                        error: Some(format!("This {} contains no audio track, so it cannot be converted to {}.",
-                                    category.to_string().to_lowercase(), target_format.to_uppercase())),
+                        error: Some(format!(
+                            "This {} contains no audio track, so it cannot be converted to {}.",
+                            category.to_string().to_lowercase(),
+                            target_format.to_uppercase()
+                        )),
                         file_info: Some(info),
                     };
                 }
 
                 if target_cat == FileCategory::Video && !info.has_video {
-                   warnings.push("Input has no video stream. Output will be audio-only if supported.".to_string());
-                }
-
-                // Check for disk space (rough estimate: same as original)
-                if let Ok(metadata) = fs::metadata(path) {
-                    let size = metadata.len();
-                    if let Some(parent) = path.parent() {
-                        // In a real app, we'd check available space on the partition of 'parent'
-                        // For now, we'll just assume it's okay but we could add more logic here.
-                    }
+                    warnings.push(
+                        "Input has no video stream. Output will be audio-only if supported."
+                            .to_string(),
+                    );
                 }
 
                 return ValidationResult {
@@ -172,11 +183,9 @@ pub async fn validate_conversion<R: tauri::Runtime>(
 }
 
 pub async fn convert_single_file<R: tauri::Runtime>(
-// ... (rest of the file remains same, but I'll update the error mapping)
-) {
-    // ...
-}
-
+    app: tauri::AppHandle<R>,
+    req: ConversionRequest,
+) -> Result<ConversionResult, String> {
     let input_path = Path::new(&req.input_path);
     if !input_path.exists() {
         return Err(format!("Input file does not exist: {}", req.input_path));
@@ -270,7 +279,9 @@ async fn run_pdf_conversion<R: tauri::Runtime>(
 
     let text_path = out_dir.join(format!(".file2file-{}.txt", Uuid::new_v4()));
     let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
-    let text_path_str = text_path.to_str().ok_or("Temporary path contains invalid UTF-8")?;
+    let text_path_str = text_path
+        .to_str()
+        .ok_or("Temporary path contains invalid UTF-8")?;
 
     let extracted = app
         .shell()
@@ -288,8 +299,7 @@ async fn run_pdf_conversion<R: tauri::Runtime>(
     }
 
     let result = if target_ext == "txt" {
-        std::fs::rename(&text_path, output)
-            .map_err(|e| format!("Could not save extracted text: {e}"))
+        std::fs::rename(&text_path, output).map_err(|e| format!("Could not save extracted text: {e}"))
     } else {
         let result = run_pandoc_conversion(app, &text_path, output).await;
         let _ = std::fs::remove_file(&text_path);
@@ -352,11 +362,7 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
     let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
     let output_str = output.to_str().ok_or("Output path contains invalid UTF-8")?;
 
-    let mut args = vec![
-        "-y".to_string(),
-        "-i".to_string(),
-        input_str.to_string(),
-    ];
+    let mut args = vec!["-y".to_string(), "-i".to_string(), input_str.to_string()];
 
     match target_ext {
         "mp4" | "mov" | "mkv" | "webm" | "avi" => {
@@ -488,11 +494,7 @@ async fn run_pandoc_conversion<R: tauri::Runtime>(
         .shell()
         .sidecar("pandoc")
         .map_err(|e| format!("Failed to create Pandoc sidecar: {}", e))?
-        .args(vec![
-            input_str,
-            "-o",
-            output_str,
-        ])
+        .args(vec![input_str, "-o", output_str])
         .output()
         .await
         .map_err(|e| format!("Pandoc execution error: {}", e))?;
@@ -516,7 +518,10 @@ async fn run_data_conversion(
     match (input_ext, target_ext) {
         ("csv", "json") => {
             let mut csv_reader = csv::Reader::from_reader(reader);
-            let headers = csv_reader.headers().map_err(|e| format!("CSV headers error: {}", e))?.clone();
+            let headers = csv_reader
+                .headers()
+                .map_err(|e| format!("CSV headers error: {}", e))?
+                .clone();
             let mut items = Vec::new();
             for result in csv_reader.records() {
                 let record = result.map_err(|e| format!("CSV record error: {}", e))?;
@@ -531,8 +536,8 @@ async fn run_data_conversion(
             std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
         }
         ("json", "csv") => {
-            let items: Value = serde_json::from_reader(reader)
-                .map_err(|e| format!("JSON parse error: {}", e))?;
+            let items: Value =
+                serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
 
             if let Some(arr) = items.as_array() {
                 if arr.is_empty() {
@@ -561,14 +566,17 @@ async fn run_data_conversion(
                 // Write rows
                 for item in arr {
                     if let Some(obj) = item.as_object() {
-                        let row: Vec<String> = header_list.iter()
-                            .map(|h| obj.get(h).and_then(|v| {
-                                match v {
-                                    Value::String(s) => Some(s.clone()),
-                                    Value::Null => Some("".to_string()),
-                                    _ => Some(v.to_string()),
-                                }
-                            }).unwrap_or_default())
+                        let row: Vec<String> = header_list
+                            .iter()
+                            .map(|h| {
+                                obj.get(h)
+                                    .and_then(|v| match v {
+                                        Value::String(s) => Some(s.clone()),
+                                        Value::Null => Some("".to_string()),
+                                        _ => Some(v.to_string()),
+                                    })
+                                    .unwrap_or_default()
+                            })
                             .collect();
                         wtr.write_record(&row)
                             .map_err(|e| format!("CSV row write error: {}", e))?;
@@ -580,36 +588,41 @@ async fn run_data_conversion(
             }
         }
         ("json", "yaml") => {
-            let value: Value = serde_json::from_reader(reader)
-                .map_err(|e| format!("JSON parse error: {}", e))?;
+            let value: Value =
+                serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
             let yaml = serde_yaml::to_string(&value)
                 .map_err(|e| format!("YAML serialization error: {}", e))?;
             std::fs::write(output, yaml).map_err(|e| format!("Failed to write output: {}", e))?;
         }
         ("yaml", "json") => {
-            let value: Value = serde_yaml::from_reader(reader)
-                .map_err(|e| format!("YAML parse error: {}", e))?;
+            let value: Value =
+                serde_yaml::from_reader(reader).map_err(|e| format!("YAML parse error: {}", e))?;
             let json = serde_json::to_string_pretty(&value)
                 .map_err(|e| format!("JSON serialization error: {}", e))?;
             std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
         }
         ("json", "toml") => {
-            let value: Value = serde_json::from_reader(reader)
-                .map_err(|e| format!("JSON parse error: {}", e))?;
+            let value: Value =
+                serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
             let toml_string = toml::to_string(&value)
                 .map_err(|e| format!("TOML serialization error: {}", e))?;
-            std::fs::write(output, toml_string).map_err(|e| format!("Failed to write output: {}", e))?;
+            std::fs::write(output, toml_string)
+                .map_err(|e| format!("Failed to write output: {}", e))?;
         }
         ("toml", "json") => {
             let content = std::fs::read_to_string(input)
                 .map_err(|e| format!("Failed to read input file: {}", e))?;
-            let value: Value = toml::from_str(&content)
-                .map_err(|e| format!("TOML parse error: {}", e))?;
+            let value: Value = toml::from_str(&content).map_err(|e| format!("TOML parse error: {}", e))?;
             let json = serde_json::to_string_pretty(&value)
                 .map_err(|e| format!("JSON serialization error: {}", e))?;
             std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
         }
-        _ => return Err(format!("Unsupported data conversion: {} to {}", input_ext, target_ext)),
+        _ => {
+            return Err(format!(
+                "Unsupported data conversion: {} to {}",
+                input_ext, target_ext
+            ))
+        }
     }
 
     Ok(())
@@ -623,7 +636,8 @@ async fn run_archive_conversion(
 ) -> Result<(), String> {
     match (input_ext, target_ext) {
         (_, "zip") => {
-            let file = File::create(output).map_err(|e| format!("Failed to create zip file: {}", e))?;
+            let file =
+                File::create(output).map_err(|e| format!("Failed to create zip file: {}", e))?;
             let mut zip = zip::ZipWriter::new(file);
             let options = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Deflated)
@@ -632,41 +646,57 @@ async fn run_archive_conversion(
             if input.is_dir() {
                 add_dir_to_zip(&mut zip, input, input, options)?;
             } else {
-                let name = input.file_name()
+                let name = input
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .ok_or("Invalid filename for zip")?;
                 add_file_to_zip(&mut zip, input, name, options)?;
             }
-            zip.finish().map_err(|e| format!("Failed to finish zip: {}", e))?;
+            zip.finish()
+                .map_err(|e| format!("Failed to finish zip: {}", e))?;
         }
         ("zip", _) => {
             // Extraction
             let file = File::open(input).map_err(|e| format!("Failed to open zip file: {}", e))?;
-            let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip archive: {}", e))?;
+            let mut archive =
+                zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip archive: {}", e))?;
             let out_dir = output.with_extension("");
-            fs::create_dir_all(&out_dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
+            fs::create_dir_all(&out_dir)
+                .map_err(|e| format!("Failed to create output directory: {}", e))?;
 
             for i in 0..archive.len() {
-                let mut file = archive.by_index(i).map_err(|e| format!("Failed to read zip entry: {}", e))?;
+                let mut file = archive
+                    .by_index(i)
+                    .map_err(|e| format!("Failed to read zip entry: {}", e))?;
                 let outpath = match file.enclosed_name() {
                     Some(path) => out_dir.join(path),
                     None => continue,
                 };
 
                 if (*file.name()).ends_with('/') {
-                    fs::create_dir_all(&outpath).map_err(|e| format!("Failed to create sub-directory: {}", e))?;
+                    fs::create_dir_all(&outpath)
+                        .map_err(|e| format!("Failed to create sub-directory: {}", e))?;
                 } else {
                     if let Some(p) = outpath.parent() {
                         if !p.exists() {
-                            fs::create_dir_all(p).map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                            fs::create_dir_all(p)
+                                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
                         }
                     }
-                    let mut outfile = File::create(&outpath).map_err(|e| format!("Failed to create output file {}: {}", outpath.display(), e))?;
-                    io::copy(&mut file, &mut outfile).map_err(|e| format!("Failed to extract file: {}", e))?;
+                    let mut outfile = File::create(&outpath).map_err(|e| {
+                        format!("Failed to create output file {}: {}", outpath.display(), e)
+                    })?;
+                    io::copy(&mut file, &mut outfile)
+                        .map_err(|e| format!("Failed to extract file: {}", e))?;
                 }
             }
         }
-        _ => return Err(format!("Unsupported archive conversion: {} to {}", input_ext, target_ext)),
+        _ => {
+            return Err(format!(
+                "Unsupported archive conversion: {} to {}",
+                input_ext, target_ext
+            ))
+        }
     }
     Ok(())
 }
@@ -677,7 +707,8 @@ fn add_file_to_zip<W: io::Write + io::Seek>(
     name: &str,
     options: zip::write::SimpleFileOptions,
 ) -> Result<(), String> {
-    zip.start_file(name, options).map_err(|e| format!("Zip error: {}", e))?;
+    zip.start_file(name, options)
+        .map_err(|e| format!("Zip error: {}", e))?;
     let mut f = File::open(path).map_err(|e| format!("Failed to open file for zipping: {}", e))?;
     io::copy(&mut f, zip).map_err(|e| format!("Failed to write to zip: {}", e))?;
     Ok(())
@@ -692,7 +723,8 @@ fn add_dir_to_zip<W: io::Write + io::Seek>(
     for entry in fs::read_dir(full_path).map_err(|e| format!("Failed to read directory: {}", e))? {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let path = entry.path();
-        let name = path.strip_prefix(base_path)
+        let name = path
+            .strip_prefix(base_path)
             .map_err(|e| format!("Prefix error: {}", e))?
             .to_str()
             .ok_or("Path contains invalid UTF-8")?;
@@ -720,7 +752,9 @@ mod tests {
 
         fs::write(&input_path, "name,age\nAlice,30\nBob,25").unwrap();
 
-        run_data_conversion(&input_path, &output_path, "csv", "json").await.unwrap();
+        run_data_conversion(&input_path, &output_path, "csv", "json")
+            .await
+            .unwrap();
 
         let output_content = fs::read_to_string(output_path).unwrap();
         let json: Value = serde_json::from_str(&output_content).unwrap();
@@ -739,7 +773,9 @@ mod tests {
         // "a" is common, "b" only in first, "c" only in second
         fs::write(&input_path, r#"[{"a": 1, "b": 2}, {"a": 3, "c": 4}]"#).unwrap();
 
-        run_data_conversion(&input_path, &output_path, "json", "csv").await.unwrap();
+        run_data_conversion(&input_path, &output_path, "json", "csv")
+            .await
+            .unwrap();
 
         let content = fs::read_to_string(output_path).unwrap();
         let mut lines = content.lines();
@@ -758,7 +794,9 @@ mod tests {
 
         fs::write(&input_path, "[]").unwrap();
 
-        run_data_conversion(&input_path, &output_path, "json", "csv").await.unwrap();
+        run_data_conversion(&input_path, &output_path, "json", "csv")
+            .await
+            .unwrap();
 
         // Output file might not even be created if it's empty, or it's empty
         if output_path.exists() {
@@ -776,12 +814,16 @@ mod tests {
         fs::write(&file_path, "hello world").unwrap();
 
         // Zip it
-        run_archive_conversion(&file_path, &zip_path, "txt", "zip").await.unwrap();
+        run_archive_conversion(&file_path, &zip_path, "txt", "zip")
+            .await
+            .unwrap();
         assert!(zip_path.exists());
 
         // Unzip it
         // The current implementation of zip to folder uses output.with_extension("")
-        run_archive_conversion(&zip_path, &zip_path, "zip", "folder").await.unwrap();
+        run_archive_conversion(&zip_path, &zip_path, "zip", "folder")
+            .await
+            .unwrap();
 
         let extracted_file = dir.path().join("test/test.txt");
         assert!(extracted_file.exists());
@@ -810,6 +852,10 @@ mod tests {
         let result = convert_single_file(app.handle().clone(), req).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.contains("Invalid target format"), "Expected 'Invalid target format', got: {}", err);
+        assert!(
+            err.contains("Invalid target format"),
+            "Expected 'Invalid target format', got: {}",
+            err
+        );
     }
 }

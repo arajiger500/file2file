@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Upload, Folder, File as FileIcon, X } from "lucide-react";
-import { FileItem, FileCategory } from "../types";
-import { isTauri } from "../services/api";
+import { Upload, Folder, File as FileIcon, X, Sparkles, ArrowRight } from "lucide-react";
+import { FileItem, FileCategory, FormatOption } from "../types";
+import { api, isTauri } from "../services/api";
 
 interface DropZoneProps {
     files: FileItem[];
     onAddFiles: (newFiles: FileItem[]) => void;
     onRemoveFile: (id: string) => void;
     onClearFiles: () => void;
+    onDirectConvert?: (format: FormatOption) => void;
 }
 
 const detectCategory = (ext: string): FileCategory => {
@@ -22,9 +23,18 @@ const detectCategory = (ext: string): FileCategory => {
     return "unknown";
 };
 
-export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveFile, onClearFiles }) => {
+export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveFile, onClearFiles, onDirectConvert }) => {
     const [isDragging, setIsDragging] = useState(false);
+    const [suggestions, setSuggestions] = useState<FormatOption[]>([]);
     const fileRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (files.length > 0) {
+            api.getSmartSuggestions(files[0].extension).then(setSuggestions);
+        } else {
+            setSuggestions([]);
+        }
+    }, [files]);
 
     const processFiles = (raw: FileList | null) => {
         if (!raw) return;
@@ -138,31 +148,57 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
             </div>
 
             {files.length > 0 && (
-                <div className="glass-card p-6 border-zinc-800/50">
-                    <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-                            <Folder className="w-3.5 h-3.5" />
-                            Batch Queue ({files.length})
-                        </h4>
-                        <button onClick={onClearFiles} className="text-[10px] font-bold text-zinc-600 hover:text-red-400 transition-colors uppercase">Clear All</button>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto pr-2">
-                        {files.map(f => (
-                            <div key={f.id} className="group/item flex items-center justify-between p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-600 transition-all">
-                                <div className="flex items-center gap-4 truncate">
-                                    <div className="p-2.5 rounded-xl bg-zinc-800 group-hover/item:bg-blue-500/10 transition-colors">
-                                        <FileIcon className="w-4 h-4 text-zinc-400 group-hover/item:text-blue-400" />
-                                    </div>
-                                    <div className="truncate">
-                                        <div className="text-sm font-semibold text-zinc-200 truncate">{f.name}</div>
-                                        <div className="text-[10px] text-zinc-500 uppercase font-mono mt-0.5">{(f.size / (1024*1024)).toFixed(2)} MB • {f.extension}</div>
-                                    </div>
-                                </div>
-                                <button onClick={(e) => { e.stopPropagation(); onRemoveFile(f.id); }} className="opacity-0 group-hover/item:opacity-100 p-2 hover:bg-red-500/10 rounded-lg text-zinc-600 hover:text-red-400 transition-all">
-                                    <X className="w-4 h-4" />
-                                </button>
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                    {suggestions.length > 0 && (
+                        <div className="glass-card p-6 border-blue-500/20 bg-blue-500/5">
+                            <div className="flex items-center gap-2 text-blue-400 mb-4">
+                                <Sparkles className="w-4 h-4" />
+                                <span className="text-xs font-bold uppercase tracking-[0.2em]">Smart Suggestions</span>
                             </div>
-                        ))}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                {suggestions.map(s => (
+                                    <button
+                                        key={s.extension}
+                                        onClick={() => onDirectConvert?.(s)}
+                                        className="group p-3 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-blue-500/50 hover:bg-zinc-800 transition-all text-left"
+                                    >
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="font-mono text-sm font-black text-white group-hover:text-blue-400">.{s.extension}</span>
+                                            <ArrowRight className="w-3 h-3 text-zinc-600 group-hover:text-blue-400 transition-transform group-hover:translate-x-0.5" />
+                                        </div>
+                                        <div className="text-[10px] text-zinc-500 truncate font-bold uppercase tracking-tighter">{s.name}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="glass-card p-6 border-zinc-800/50">
+                        <div className="flex items-center justify-between mb-4">
+                            <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
+                                <Folder className="w-3.5 h-3.5" />
+                                Batch Queue ({files.length})
+                            </h4>
+                            <button onClick={onClearFiles} className="text-[10px] font-bold text-zinc-600 hover:text-red-400 transition-colors uppercase">Clear All</button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto pr-2">
+                            {files.map(f => (
+                                <div key={f.id} className="group/item flex items-center justify-between p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-600 transition-all">
+                                    <div className="flex items-center gap-4 truncate">
+                                        <div className="p-2.5 rounded-xl bg-zinc-800 group-hover/item:bg-blue-500/10 transition-colors">
+                                            <FileIcon className="w-4 h-4 text-zinc-400 group-hover/item:text-blue-400" />
+                                        </div>
+                                        <div className="truncate">
+                                            <div className="text-sm font-semibold text-zinc-200 truncate">{f.name}</div>
+                                            <div className="text-[10px] text-zinc-500 uppercase font-mono mt-0.5">{(f.size / (1024*1024)).toFixed(2)} MB • {f.extension}</div>
+                                        </div>
+                                    </div>
+                                    <button onClick={(e) => { e.stopPropagation(); onRemoveFile(f.id); }} className="opacity-0 group-hover/item:opacity-100 p-2 hover:bg-red-500/10 rounded-lg text-zinc-600 hover:text-red-400 transition-all">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}

@@ -12,7 +12,6 @@ const BinaryRow = ({ status }: { status: BinaryStatus | undefined }) => {
     if (!status) return null;
 
     const isMissing = !status.available;
-    const isBundled = status.path_or_sidecar === "bundled";
 
     return (
         <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800">

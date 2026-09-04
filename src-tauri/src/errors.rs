@@ -1,4 +1,4 @@
-pub fn map_technical_error(error: &str, input_path: &str, target_format: &str) -> String {
+pub fn map_technical_error(error: &str, _input_path: &str, target_format: &str) -> String {
     let err_lower = error.to_lowercase();
 
     // FFmpeg specific errors
