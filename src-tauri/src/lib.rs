@@ -8,8 +8,8 @@ mod commands {
     use tauri::AppHandle;
 
     #[tauri::command]
-    pub fn detect_hardware() -> HardwareInfo {
-        detect_hardware_capabilities()
+    pub async fn detect_hardware(app: AppHandle) -> HardwareInfo {
+        detect_hardware_capabilities(Some(app)).await
     }
 
     #[tauri::command]
@@ -23,8 +23,8 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn check_sidecars() -> SidecarHealthReport {
-        check_sidecar_health()
+    pub async fn check_sidecars(app: AppHandle) -> SidecarHealthReport {
+        check_sidecar_health(&app).await
     }
 
     #[tauri::command]

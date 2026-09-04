@@ -1,5 +1,8 @@
 use crate::formats::{get_category_for_extension, FileCategory};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::fs::{self, File};
+use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri_plugin_shell::ShellExt;
@@ -68,8 +71,12 @@ pub async fn convert_single_file(
 
     let execution_result = if input_ext == "pdf" {
         run_pdf_conversion(&app, input_path, &output_path, &target_ext).await
+    } else if category == FileCategory::Data {
+        run_data_conversion(input_path, &output_path, &input_ext, &target_ext).await
+    } else if category == FileCategory::Archive {
+        run_archive_conversion(input_path, &output_path, &input_ext, &target_ext).await
     } else if category == FileCategory::Image || category == FileCategory::Vector {
-        run_image_magick_conversion(input_path, &output_path).await
+        run_image_magick_conversion(&app, input_path, &output_path).await
     } else if target_category == FileCategory::Document {
         run_pandoc_conversion(&app, input_path, &output_path).await
     } else {
@@ -116,9 +123,13 @@ async fn run_pdf_conversion(
     let out_dir = output.parent().unwrap_or_else(|| Path::new("."));
 
     let text_path = out_dir.join(format!(".file2file-{}.txt", Uuid::new_v4()));
-    let extracted = std::process::Command::new("pdftotext")
+    let extracted = app
+        .shell()
+        .sidecar("pdftotext")
+        .map_err(|e| format!("Failed to create pdftotext sidecar: {}", e))?
         .args(["-layout", input.to_str().unwrap(), text_path.to_str().unwrap()])
         .output()
+        .await
         .map_err(|_| "PDF conversion requires Poppler's pdftotext utility. Install poppler-utils and try again.".to_string())?;
 
     if !extracted.status.success() {
@@ -139,10 +150,18 @@ async fn run_pdf_conversion(
     result
 }
 
-async fn run_image_magick_conversion(input: &Path, output: &Path) -> Result<(), String> {
-    let result = std::process::Command::new("magick")
+async fn run_image_magick_conversion(
+    app: &tauri::AppHandle,
+    input: &Path,
+    output: &Path,
+) -> Result<(), String> {
+    let result = app
+        .shell()
+        .sidecar("magick")
+        .map_err(|e| format!("Failed to create ImageMagick sidecar: {}", e))?
         .args([input.to_str().unwrap(), output.to_str().unwrap()])
         .output()
+        .await
         .map_err(|_| {
             "Image conversion requires ImageMagick (magick) to be installed.".to_string()
         })?;
@@ -324,5 +343,208 @@ async fn run_pandoc_conversion(
         Ok(())
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+async fn run_data_conversion(
+    input: &Path,
+    output: &Path,
+    input_ext: &str,
+    target_ext: &str,
+) -> Result<(), String> {
+    let input_file = File::open(input).map_err(|e| format!("Failed to open input file: {}", e))?;
+    let reader = BufReader::new(input_file);
+
+    match (input_ext, target_ext) {
+        ("csv", "json") => {
+            let mut csv_reader = csv::Reader::from_reader(reader);
+            let headers = csv_reader.headers().map_err(|e| format!("CSV headers error: {}", e))?.clone();
+            let mut items = Vec::new();
+            for result in csv_reader.records() {
+                let record = result.map_err(|e| format!("CSV record error: {}", e))?;
+                let mut map = serde_json::Map::new();
+                for (header, value) in headers.iter().zip(record.iter()) {
+                    map.insert(header.to_string(), Value::String(value.to_string()));
+                }
+                items.push(Value::Object(map));
+            }
+            let json = serde_json::to_string_pretty(&items)
+                .map_err(|e| format!("JSON serialization error: {}", e))?;
+            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("json", "csv") => {
+            let items: Value = serde_json::from_reader(reader)
+                .map_err(|e| format!("JSON parse error: {}", e))?;
+            if let Some(arr) = items.as_array() {
+                let mut wtr = csv::Writer::from_path(output)
+                    .map_err(|e| format!("Failed to create CSV writer: {}", e))?;
+                for item in arr {
+                    wtr.serialize(item)
+                        .map_err(|e| format!("CSV serialization error: {}", e))?;
+                }
+                wtr.flush().map_err(|e| format!("Failed to flush CSV: {}", e))?;
+            } else {
+                return Err("JSON must be an array of objects to convert to CSV".to_string());
+            }
+        }
+        ("json", "yaml") => {
+            let value: Value = serde_json::from_reader(reader)
+                .map_err(|e| format!("JSON parse error: {}", e))?;
+            let yaml = serde_yaml::to_string(&value)
+                .map_err(|e| format!("YAML serialization error: {}", e))?;
+            std::fs::write(output, yaml).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("yaml", "json") => {
+            let value: Value = serde_yaml::from_reader(reader)
+                .map_err(|e| format!("YAML parse error: {}", e))?;
+            let json = serde_json::to_string_pretty(&value)
+                .map_err(|e| format!("JSON serialization error: {}", e))?;
+            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("json", "toml") => {
+            let value: Value = serde_json::from_reader(reader)
+                .map_err(|e| format!("JSON parse error: {}", e))?;
+            let toml = toml::to_string_pretty(&value)
+                .map_err(|e| format!("TOML serialization error: {}", e))?;
+            std::fs::write(output, toml).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("toml", "json") => {
+            let content = std::fs::read_to_string(input)
+                .map_err(|e| format!("Failed to read input file: {}", e))?;
+            let value: Value = toml::from_str(&content)
+                .map_err(|e| format!("TOML parse error: {}", e))?;
+            let json = serde_json::to_string_pretty(&value)
+                .map_err(|e| format!("JSON serialization error: {}", e))?;
+            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        _ => return Err(format!("Unsupported data conversion: {} to {}", input_ext, target_ext)),
+    }
+
+    Ok(())
+}
+
+async fn run_archive_conversion(
+    input: &Path,
+    output: &Path,
+    input_ext: &str,
+    target_ext: &str,
+) -> Result<(), String> {
+    match (input_ext, target_ext) {
+        (_, "zip") => {
+            let file = File::create(output).map_err(|e| format!("Failed to create zip file: {}", e))?;
+            let mut zip = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated)
+                .unix_permissions(0o755);
+
+            if input.is_dir() {
+                add_dir_to_zip(&mut zip, input, input, options)?;
+            } else {
+                add_file_to_zip(&mut zip, input, input.file_name().unwrap().to_str().unwrap(), options)?;
+            }
+            zip.finish().map_err(|e| format!("Failed to finish zip: {}", e))?;
+        }
+        ("zip", _) => {
+            // Extraction
+            let file = File::open(input).map_err(|e| format!("Failed to open zip file: {}", e))?;
+            let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip archive: {}", e))?;
+            let out_dir = output.with_extension("");
+            fs::create_dir_all(&out_dir).map_err(|e| format!("Failed to create output directory: {}", e))?;
+
+            for i in 0..archive.len() {
+                let mut file = archive.by_index(i).map_err(|e| format!("Failed to read zip entry: {}", e))?;
+                let outpath = match file.enclosed_name() {
+                    Some(path) => out_dir.join(path),
+                    None => continue,
+                };
+
+                if (*file.name()).ends_with('/') {
+                    fs::create_dir_all(&outpath).unwrap();
+                } else {
+                    if let Some(p) = outpath.parent() {
+                        if !p.exists() {
+                            fs::create_dir_all(p).unwrap();
+                        }
+                    }
+                    let mut outfile = File::create(&outpath).unwrap();
+                    io::copy(&mut file, &mut outfile).unwrap();
+                }
+            }
+        }
+        _ => return Err(format!("Unsupported archive conversion: {} to {}", input_ext, target_ext)),
+    }
+    Ok(())
+}
+
+fn add_file_to_zip<W: io::Write + io::Seek>(
+    zip: &mut zip::ZipWriter<W>,
+    path: &Path,
+    name: &str,
+    options: zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    zip.start_file(name, options).map_err(|e| format!("Zip error: {}", e))?;
+    let mut f = File::open(path).map_err(|e| format!("Failed to open file for zipping: {}", e))?;
+    let mut buffer = Vec::new();
+    f.read_to_end(&mut buffer).map_err(|e| format!("Failed to read file for zipping: {}", e))?;
+    zip.write_all(&buffer).map_err(|e| format!("Failed to write to zip: {}", e))?;
+    Ok(())
+}
+
+fn add_dir_to_zip<W: io::Write + io::Seek>(
+    zip: &mut zip::ZipWriter<W>,
+    full_path: &Path,
+    base_path: &Path,
+    options: zip::write::SimpleFileOptions,
+) -> Result<(), String> {
+    for entry in fs::read_dir(full_path).map_err(|e| format!("Failed to read directory: {}", e))? {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        let name = path.strip_prefix(base_path).unwrap().to_str().unwrap();
+
+        if path.is_dir() {
+            add_dir_to_zip(zip, &path, base_path, options)?;
+        } else {
+            add_file_to_zip(zip, &path, name, options)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_csv_to_json() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("test.csv");
+        let output_path = dir.path().join("test.json");
+
+        fs::write(&input_path, "name,age\nAlice,30\nBob,25").unwrap();
+
+        run_data_conversion(&input_path, &output_path, "csv", "json").await.unwrap();
+
+        let output_content = fs::read_to_string(output_path).unwrap();
+        let json: Value = serde_json::from_str(&output_content).unwrap();
+
+        assert!(json.is_array());
+        assert_eq!(json[0]["name"], "Alice");
+        assert_eq!(json[1]["age"], "25");
+    }
+
+    #[tokio::test]
+    async fn test_json_to_yaml() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("test.json");
+        let output_path = dir.path().join("test.yaml");
+
+        fs::write(&input_path, r#"[{"name": "Alice"}]"#).unwrap();
+
+        run_data_conversion(&input_path, &output_path, "json", "yaml").await.unwrap();
+
+        let output_content = fs::read_to_string(output_path).unwrap();
+        assert!(output_content.contains("name: Alice"));
     }
 }

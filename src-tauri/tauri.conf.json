@@ -35,7 +35,9 @@
         ],
         "externalBin": [
             "binaries/ffmpeg",
-            "binaries/pandoc"
+            "binaries/pandoc",
+            "binaries/magick",
+            "binaries/pdftotext"
         ]
     },
     "plugins": {

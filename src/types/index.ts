@@ -1,4 +1,4 @@
-export type FileCategory = "video" | "audio" | "image" | "document" | "vector" | "unknown";
+export type FileCategory = "video" | "audio" | "image" | "document" | "vector" | "data" | "archive" | "unknown";
 
 export interface EncoderProfile {
     id: string;

@@ -27,3 +27,4 @@ pnpm-debug.log*
 binaries/
 src-tauri/binaries/
 src-tauri/sample_test.*
+.aider*

@@ -8,6 +8,8 @@ pub enum FileCategory {
     Image,
     Document,
     Vector,
+    Data,
+    Archive,
     Unknown,
 }
 
@@ -52,6 +54,8 @@ pub fn get_category_for_extension(ext: &str) -> FileCategory {
             FileCategory::Document
         }
         "svg" | "eps" | "ai" => FileCategory::Vector,
+        "csv" | "json" | "xlsx" | "xls" | "yaml" | "xml" | "toml" | "sql" => FileCategory::Data,
+        "zip" | "tar" | "gz" | "7z" | "rar" => FileCategory::Archive,
         _ => FileCategory::Unknown,
     }
 }
@@ -61,6 +65,66 @@ pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
     let mut catalog = Vec::new();
 
     match category {
+        FileCategory::Archive => {
+            let targets = ["zip"];
+            for t in targets {
+                if t == input_ext.to_lowercase() {
+                    continue;
+                }
+                catalog.push(FormatOption {
+                    extension: t.to_string(),
+                    name: "ZIP Archive".to_string(),
+                    category: FileCategory::Archive,
+                    subcategory: "Compression".to_string(),
+                    description: "High-performance ZIP compression".to_string(),
+                    comparison_note: None,
+                    is_lossless: true,
+                    is_recommended: true,
+                    recommended_for: vec!["Storage".to_string(), "Sharing".to_string()],
+                    sidecar_engine: "Rust-Native".to_string(),
+                    pros: vec!["Fast".to_string()],
+                    cons: vec![],
+                });
+            }
+            if input_ext.to_lowercase() == "zip" {
+                catalog.push(FormatOption {
+                    extension: "folder".to_string(),
+                    name: "Extract Archive".to_string(),
+                    category: FileCategory::Archive,
+                    subcategory: "Compression".to_string(),
+                    description: "Extract all files from ZIP".to_string(),
+                    comparison_note: None,
+                    is_lossless: true,
+                    is_recommended: true,
+                    recommended_for: vec!["Files".to_string()],
+                    sidecar_engine: "Rust-Native".to_string(),
+                    pros: vec!["Complete".to_string()],
+                    cons: vec![],
+                });
+            }
+        }
+        FileCategory::Data => {
+            let targets = ["json", "csv", "yaml", "toml", "xml"];
+            for t in targets {
+                if t == input_ext.to_lowercase() {
+                    continue;
+                }
+                catalog.push(FormatOption {
+                    extension: t.to_string(),
+                    name: format!("{} Data", t.to_uppercase()),
+                    category: FileCategory::Data,
+                    subcategory: "Data Exchange".to_string(),
+                    description: format!("Structured {} transformation", t.to_uppercase()),
+                    comparison_note: None,
+                    is_lossless: true,
+                    is_recommended: true,
+                    recommended_for: vec!["Development".to_string(), "Analysis".to_string()],
+                    sidecar_engine: "Rust-Native".to_string(),
+                    pros: vec!["Fast".to_string(), "Precise".to_string()],
+                    cons: vec![],
+                });
+            }
+        }
         FileCategory::Document => {
             let targets = ["pdf", "docx", "md", "html", "txt", "rtf", "epub", "odt"];
             for t in targets {

@@ -20,7 +20,9 @@ pub struct HardwareInfo {
     pub detected_gpus: Vec<String>,
 }
 
-pub fn detect_hardware_capabilities() -> HardwareInfo {
+use tauri_plugin_shell::ShellExt;
+
+pub async fn detect_hardware_capabilities(app: Option<tauri::AppHandle>) -> HardwareInfo {
     let cpu_cores = num_cpus::get();
     let mut detected_gpus = Vec::new();
     let mut available_encoders = Vec::new();
@@ -51,12 +53,23 @@ pub fn detect_hardware_capabilities() -> HardwareInfo {
     }
 
     // Try querying ffmpeg encoders if available on PATH or sidecar
-    let ffmpeg_output = Command::new("ffmpeg")
-        .arg("-encoders")
-        .output()
-        .ok()
-        .and_then(|out| String::from_utf8(out.stdout).ok())
-        .unwrap_or_default();
+    let ffmpeg_output = if let Some(app) = app {
+        if let Ok(sidecar) = app.shell().sidecar("ffmpeg") {
+            sidecar.args(["-encoders"]).output().await
+                .ok()
+                .and_then(|out| String::from_utf8(out.stdout).ok())
+                .unwrap_or_default()
+        } else {
+            String::new()
+        }
+    } else {
+        Command::new("ffmpeg")
+            .arg("-encoders")
+            .output()
+            .ok()
+            .and_then(|out| String::from_utf8(out.stdout).ok())
+            .unwrap_or_default()
+    };
 
     let has_nvenc = ffmpeg_output.contains("nvenc") || gpu_vendor.as_deref() == Some("NVIDIA");
     let has_qsv = ffmpeg_output.contains("qsv");

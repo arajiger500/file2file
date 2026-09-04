@@ -1,0 +1,25 @@
+.animate-spin-slow	src/index.css	/^.animate-spin-slow {$/;"	c
+::-webkit-scrollbar	src/index.css	/^::-webkit-scrollbar {$/;"	s
+::-webkit-scrollbar-thumb	src/index.css	/^::-webkit-scrollbar-thumb {$/;"	s
+::-webkit-scrollbar-thumb:hover	src/index.css	/^::-webkit-scrollbar-thumb:hover {$/;"	s
+::-webkit-scrollbar-track	src/index.css	/^::-webkit-scrollbar-track {$/;"	s
+:root	src/index.css	/^:root {$/;"	s
+AdvancedSettings	src/types/index.ts	/^export interface AdvancedSettings {$/;"	i
+BinaryStatus	src-tauri/src/sidecar.rs	/^pub struct BinaryStatus {$/;"	s
+BinaryStatus	src/types/index.ts	/^export interface BinaryStatus {$/;"	i
+ConversionRequest	src-tauri/src/converter.rs	/^pub struct ConversionRequest {$/;"	s
+ConversionRequest	src/types/index.ts	/^export interface ConversionRequest {$/;"	i
+ConversionResult	src-tauri/src/converter.rs	/^pub struct ConversionResult {$/;"	s
+ConversionResult	src/types/index.ts	/^export interface ConversionResult {$/;"	i
+EncoderProfile	src-tauri/src/hardware.rs	/^pub struct EncoderProfile {$/;"	s
+EncoderProfile	src/types/index.ts	/^export interface EncoderProfile {$/;"	i
+FileItem	src/types/index.ts	/^export interface FileItem {$/;"	i
+FormatOption	src-tauri/src/formats.rs	/^pub struct FormatOption {$/;"	s
+FormatOption	src/types/index.ts	/^export interface FormatOption {$/;"	i
+HardwareInfo	src-tauri/src/hardware.rs	/^pub struct HardwareInfo {$/;"	s
+HardwareInfo	src/types/index.ts	/^export interface HardwareInfo {$/;"	i
+QuickPreset	src-tauri/src/formats.rs	/^pub struct QuickPreset {$/;"	s
+QuickPreset	src/types/index.ts	/^export interface QuickPreset {$/;"	i
+SidecarHealthReport	src-tauri/src/sidecar.rs	/^pub struct SidecarHealthReport {$/;"	s
+SidecarHealthReport	src/types/index.ts	/^export interface SidecarHealthReport {$/;"	i
+body	src/index.css	/^body {$/;"	s
