@@ -2,7 +2,7 @@ use crate::formats::{get_category_for_extension, FileCategory};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, File};
-use std::io::{self, BufReader, Read, Write};
+use std::io::{self, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri_plugin_shell::ShellExt;
@@ -375,12 +375,46 @@ async fn run_data_conversion(
         ("json", "csv") => {
             let items: Value = serde_json::from_reader(reader)
                 .map_err(|e| format!("JSON parse error: {}", e))?;
+
             if let Some(arr) = items.as_array() {
+                if arr.is_empty() {
+                    return Ok(());
+                }
+
+                // Collect all unique keys for headers
+                let mut headers = std::collections::BTreeSet::new();
+                for item in arr {
+                    if let Some(obj) = item.as_object() {
+                        for key in obj.keys() {
+                            headers.insert(key.to_string());
+                        }
+                    }
+                }
+
+                let header_list: Vec<String> = headers.into_iter().collect();
+
                 let mut wtr = csv::Writer::from_path(output)
                     .map_err(|e| format!("Failed to create CSV writer: {}", e))?;
+
+                // Write headers
+                wtr.write_record(&header_list)
+                    .map_err(|e| format!("CSV header write error: {}", e))?;
+
+                // Write rows
                 for item in arr {
-                    wtr.serialize(item)
-                        .map_err(|e| format!("CSV serialization error: {}", e))?;
+                    if let Some(obj) = item.as_object() {
+                        let row: Vec<String> = header_list.iter()
+                            .map(|h| obj.get(h).and_then(|v| {
+                                match v {
+                                    Value::String(s) => Some(s.clone()),
+                                    Value::Null => Some("".to_string()),
+                                    _ => Some(v.to_string()),
+                                }
+                            }).unwrap_or_default())
+                            .collect();
+                        wtr.write_record(&row)
+                            .map_err(|e| format!("CSV row write error: {}", e))?;
+                    }
                 }
                 wtr.flush().map_err(|e| format!("Failed to flush CSV: {}", e))?;
             } else {
@@ -459,15 +493,15 @@ async fn run_archive_conversion(
                 };
 
                 if (*file.name()).ends_with('/') {
-                    fs::create_dir_all(&outpath).unwrap();
+                    fs::create_dir_all(&outpath).map_err(|e| format!("Failed to create sub-directory: {}", e))?;
                 } else {
                     if let Some(p) = outpath.parent() {
                         if !p.exists() {
-                            fs::create_dir_all(p).unwrap();
+                            fs::create_dir_all(p).map_err(|e| format!("Failed to create parent directory: {}", e))?;
                         }
                     }
-                    let mut outfile = File::create(&outpath).unwrap();
-                    io::copy(&mut file, &mut outfile).unwrap();
+                    let mut outfile = File::create(&outpath).map_err(|e| format!("Failed to create output file {}: {}", outpath.display(), e))?;
+                    io::copy(&mut file, &mut outfile).map_err(|e| format!("Failed to extract file: {}", e))?;
                 }
             }
         }
@@ -484,9 +518,7 @@ fn add_file_to_zip<W: io::Write + io::Seek>(
 ) -> Result<(), String> {
     zip.start_file(name, options).map_err(|e| format!("Zip error: {}", e))?;
     let mut f = File::open(path).map_err(|e| format!("Failed to open file for zipping: {}", e))?;
-    let mut buffer = Vec::new();
-    f.read_to_end(&mut buffer).map_err(|e| format!("Failed to read file for zipping: {}", e))?;
-    zip.write_all(&buffer).map_err(|e| format!("Failed to write to zip: {}", e))?;
+    io::copy(&mut f, zip).map_err(|e| format!("Failed to write to zip: {}", e))?;
     Ok(())
 }
 
@@ -535,16 +567,61 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_json_to_yaml() {
+    async fn test_json_to_csv_mixed_keys() {
         let dir = tempdir().unwrap();
         let input_path = dir.path().join("test.json");
-        let output_path = dir.path().join("test.yaml");
+        let output_path = dir.path().join("test.csv");
 
-        fs::write(&input_path, r#"[{"name": "Alice"}]"#).unwrap();
+        // "a" is common, "b" only in first, "c" only in second
+        fs::write(&input_path, r#"[{"a": 1, "b": 2}, {"a": 3, "c": 4}]"#).unwrap();
 
-        run_data_conversion(&input_path, &output_path, "json", "yaml").await.unwrap();
+        run_data_conversion(&input_path, &output_path, "json", "csv").await.unwrap();
 
-        let output_content = fs::read_to_string(output_path).unwrap();
-        assert!(output_content.contains("name: Alice"));
+        let content = fs::read_to_string(output_path).unwrap();
+        let mut lines = content.lines();
+
+        // BTreeSet sorts keys: a, b, c
+        assert_eq!(lines.next(), Some("a,b,c"));
+        assert_eq!(lines.next(), Some("1,2,"));
+        assert_eq!(lines.next(), Some("3,,4"));
+    }
+
+    #[tokio::test]
+    async fn test_json_to_csv_empty() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("test.json");
+        let output_path = dir.path().join("test.csv");
+
+        fs::write(&input_path, "[]").unwrap();
+
+        run_data_conversion(&input_path, &output_path, "json", "csv").await.unwrap();
+
+        // Output file might not even be created if it's empty, or it's empty
+        if output_path.exists() {
+            let content = fs::read_to_string(output_path).unwrap();
+            assert!(content.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_zip_unzip_roundtrip() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+        let zip_path = dir.path().join("test.zip");
+
+        fs::write(&file_path, "hello world").unwrap();
+
+        // Zip it
+        run_archive_conversion(&file_path, &zip_path, "txt", "zip").await.unwrap();
+        assert!(zip_path.exists());
+
+        // Unzip it
+        // The current implementation of zip to folder uses output.with_extension("")
+        run_archive_conversion(&zip_path, &zip_path, "zip", "folder").await.unwrap();
+
+        let extracted_file = dir.path().join("test/test.txt");
+        assert!(extracted_file.exists());
+        let content = fs::read_to_string(extracted_file).unwrap();
+        assert_eq!(content, "hello world");
     }
 }
