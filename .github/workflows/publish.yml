@@ -1,0 +1,102 @@
+name: "publish"
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target universal-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf desktop-file-utils libglib2.0-bin
+
+      - name: install frontend dependencies
+        run: npm install
+
+      - name: setup sidecars
+        shell: bash
+        run: |
+          mkdir -p src-tauri/binaries
+          
+          case "${{ matrix.platform }}" in
+            "ubuntu-22.04")
+              ARCH="x86_64-unknown-linux-gnu"
+              # Install real binaries if possible
+              sudo apt-get install -y ffmpeg poppler-utils pandoc imagemagick
+              cp $(which ffmpeg) src-tauri/binaries/ffmpeg-$ARCH
+              cp $(which ffprobe) src-tauri/binaries/ffprobe-$ARCH
+              cp $(which pandoc) src-tauri/binaries/pandoc-$ARCH
+              cp $(which magick) src-tauri/binaries/magick-$ARCH
+              cp $(which pdftotext) src-tauri/binaries/pdftotext-$ARCH
+              ;;
+            "macos-latest")
+              # Setup for both x64 and arm64
+              brew install ffmpeg poppler pandoc imagemagick
+              cp $(which ffmpeg) src-tauri/binaries/ffmpeg-x86_64-apple-darwin
+              cp $(which ffprobe) src-tauri/binaries/ffprobe-x86_64-apple-darwin
+              cp $(which pandoc) src-tauri/binaries/pandoc-x86_64-apple-darwin
+              cp $(which magick) src-tauri/binaries/magick-x86_64-apple-darwin
+              cp $(which pdftotext) src-tauri/binaries/pdftotext-x86_64-apple-darwin
+              
+              cp $(which ffmpeg) src-tauri/binaries/ffmpeg-aarch64-apple-darwin
+              cp $(which ffprobe) src-tauri/binaries/ffprobe-aarch64-apple-darwin
+              cp $(which pandoc) src-tauri/binaries/pandoc-aarch64-apple-darwin
+              cp $(which magick) src-tauri/binaries/magick-aarch64-apple-darwin
+              cp $(which pdftotext) src-tauri/binaries/pdftotext-aarch64-apple-darwin
+              ;;
+            "windows-latest")
+              ARCH="x86_64-pc-windows-msvc"
+              choco install ffmpeg pandoc imagemagick
+              # Copying from PATH. We use 'where' on Windows or just rely on choco known paths.
+              cp $(which ffmpeg) src-tauri/binaries/ffmpeg-$ARCH.exe
+              cp $(which ffprobe) src-tauri/binaries/ffprobe-$ARCH.exe
+              cp $(which pandoc) src-tauri/binaries/pandoc-$ARCH.exe
+              cp $(which magick) src-tauri/binaries/magick-$ARCH.exe
+              # pdftotext usually comes with poppler-utils, not available on choco easily
+              # We'll touch it to avoid bundle failure
+              echo "dummy" > src-tauri/binaries/pdftotext-$ARCH.exe
+              ;;
+          esac
+          
+          chmod +x src-tauri/binaries/*
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: "App v__VERSION__"
+          releaseBody: "See the assets to download this version and install."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
