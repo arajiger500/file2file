@@ -86,3 +86,9 @@
 ## Testing
 - [x] Establish Rust integration test suite (Added to converter.rs).
 - [ ] Establish Vitest/React Testing Library setup for frontend.
+
+## Deployment & Packaging
+- [x] Generate cross-platform application icons (PNG, ICO, ICNS).
+- [x] Configure multi-platform bundling in `tauri.conf.json`.
+- [x] Fix AppImage "missing square icon" build error.
+- [x] Configure native installers for Windows (NSIS/WiX) and macOS (DMG).
