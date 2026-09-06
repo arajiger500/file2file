@@ -1,12 +1,15 @@
 use crate::errors::map_technical_error;
 use crate::formats::{get_category_for_extension, FileCategory};
+use crate::sidecar::get_binary_command;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, File};
-use std::io::{self, BufReader};
+use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
+use calamine::{Reader, Xlsx};
+use rust_xlsxwriter::Workbook;
+use rusqlite::Connection;
 use std::time::Instant;
-use tauri_plugin_shell::ShellExt;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,10 +59,8 @@ pub async fn probe_file_info<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     path: &str,
 ) -> Result<FileProbeResult, String> {
-    let output = app
-        .shell()
-        .sidecar("ffprobe")
-        .map_err(|e| format!("Failed to create ffprobe sidecar: {}", e))?
+    let output = get_binary_command(app, "ffprobe")
+        .await?
         .args([
             "-v",
             "quiet",
@@ -199,7 +200,13 @@ pub async fn convert_single_file<R: tauri::Runtime>(
     let stem = input_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .unwrap_or("output");
+        .unwrap_or("output")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
+        .collect::<String>();
+    if stem.is_empty() {
+        return Err("Invalid input filename stem".to_string());
+    }
     let out_dir = match &req.output_dir {
         Some(d) => PathBuf::from(d),
         None => input_path
@@ -228,7 +235,13 @@ pub async fn convert_single_file<R: tauri::Runtime>(
     } else if category == FileCategory::Archive {
         run_archive_conversion(input_path, &output_path, &input_ext, &target_ext).await
     } else if category == FileCategory::Image || category == FileCategory::Vector {
-        run_image_magick_conversion(&app, input_path, &output_path).await
+        // Determine if target is also image/vector (ImageMagick) or document (Pandoc fallback)
+        let target_category = get_category_for_extension(&target_ext);
+        if target_category == FileCategory::Document {
+            run_pandoc_conversion(&app, input_path, &output_path).await
+        } else {
+            run_image_magick_conversion(&app, input_path, &output_path).await
+        }
     } else if target_category == FileCategory::Document {
         run_pandoc_conversion(&app, input_path, &output_path).await
     } else {
@@ -283,29 +296,29 @@ async fn run_pdf_conversion<R: tauri::Runtime>(
         .to_str()
         .ok_or("Temporary path contains invalid UTF-8")?;
 
-    let extracted = app
-        .shell()
-        .sidecar("pdftotext")
-        .map_err(|e| format!("Failed to create pdftotext sidecar: {}", e))?
+    let extracted = get_binary_command(app, "pdftotext")
+        .await?
         .args(["-layout", input_str, text_path_str])
         .output()
         .await
-        .map_err(|_| "PDF conversion requires Poppler's pdftotext utility. Install poppler-utils and try again.".to_string())?;
+        .map_err(|e| format!("pdftotext execution error: {}. PDF conversion requires Poppler's pdftotext utility.", e))?;
 
     if !extracted.status.success() {
+        let _ = std::fs::remove_file(&text_path);
         return Err(String::from_utf8_lossy(&extracted.stderr)
             .trim()
             .to_string());
     }
 
     let result = if target_ext == "txt" {
-        std::fs::rename(&text_path, output).map_err(|e| format!("Could not save extracted text: {e}"))
+        std::fs::copy(&text_path, output)
+            .map(|_| ())
+            .map_err(|e| format!("Could not save extracted text: {e}"))
     } else {
-        let result = run_pandoc_conversion(app, &text_path, output).await;
-        let _ = std::fs::remove_file(&text_path);
-        result
+        run_pandoc_conversion(app, &text_path, output).await
     };
 
+    let _ = std::fs::remove_file(&text_path);
     result
 }
 
@@ -317,15 +330,13 @@ async fn run_image_magick_conversion<R: tauri::Runtime>(
     let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
     let output_str = output.to_str().ok_or("Output path contains invalid UTF-8")?;
 
-    let result = app
-        .shell()
-        .sidecar("magick")
-        .map_err(|e| format!("Failed to create ImageMagick sidecar: {}", e))?
+    let result = get_binary_command(app, "magick")
+        .await?
         .args([input_str, output_str])
         .output()
         .await
-        .map_err(|_| {
-            "Image conversion requires ImageMagick (magick) to be installed.".to_string()
+        .map_err(|e| {
+            format!("magick execution error: {}. Image conversion requires ImageMagick (magick) to be installed.", e)
         })?;
 
     if result.status.success() {
@@ -393,6 +404,13 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
                 args.push("-c:a".to_string());
                 args.push("aac".to_string());
             }
+            // Subtitle extraction from MKV: extract the first SRT track
+            if target_ext == "srt" {
+                args.push("-vn".to_string());
+                args.push("-c:s".to_string());
+                args.push("-map".to_string());
+                args.push("0:s:0".to_string());
+            }
         }
         "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" | "opus" => {
             args.push("-vn".to_string());
@@ -429,21 +447,54 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
                 }
             }
         }
-        "webp" | "png" | "jpg" | "jpeg" | "avif" | "gif" | "bmp" | "tiff" => match target_ext {
-            "webp" => {
-                args.push("-c:v".to_string());
-                args.push("libwebp".to_string());
+        "webp" | "png" | "jpg" | "jpeg" | "avif" | "gif" => {
+            args.push("-c:v".to_string());
+            args.push("-c:a".to_string());
+            args.push("aac".to_string());
+            match target_ext {
+                "ico" => {
+                    // ImageMagick is better for ICO multi-res
+                    run_image_magick_conversion(app, input, output).await?;
+                    return Ok(());
+                }
+                "webp" => {
+                    args.push("libwebp".to_string());
+                }
+                "avif" => {
+                    args.push("libaom-av1".to_string());
+                }
+                "gif" => {
+                    args.push("fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse".to_string());
+                }
+                "tiff" => {
+                    args.push("tiff".to_string());
+                }
+                "bmp" => {
+                    args.push("bmp".to_string());
+                }
+                "jpeg" => {
+                    args.push("jpeg".to_string());
+                }
+                "heic" => {
+                    args.push("libhevc".to_string());
+                }
+                "png" => {
+                    args.push("png".to_string());
+                }
+                _ => {}
             }
-            "avif" => {
-                args.push("-c:v".to_string());
-                args.push("libaom-av1".to_string());
-            }
-            "gif" => {
-                args.push("-vf".to_string());
-                args.push("fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse".to_string());
-            }
-            _ => {}
-        },
+        }
+        "srt" => {
+            args.push("-vn".to_string());
+            args.push("-c:s".to_string());
+            args.push("-map".to_string());
+            args.push("0:s:0".to_string());
+        }
+        "raw" | "cr2" | "nef" | "arw" | "dng" => {
+            args.push("-vn".to_string());
+            args.push("-c:v".to_string());
+            args.push("libjpeg".to_string());
+        }
         _ => {}
     }
 
@@ -466,10 +517,8 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
 
     args.push(output_str.to_string());
 
-    let output = app
-        .shell()
-        .sidecar("ffmpeg")
-        .map_err(|e| format!("Failed to create FFmpeg sidecar: {}", e))?
+    let output = get_binary_command(app, "ffmpeg")
+        .await?
         .args(args)
         .output()
         .await
@@ -490,10 +539,8 @@ async fn run_pandoc_conversion<R: tauri::Runtime>(
     let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
     let output_str = output.to_str().ok_or("Output path contains invalid UTF-8")?;
 
-    let output = app
-        .shell()
-        .sidecar("pandoc")
-        .map_err(|e| format!("Failed to create Pandoc sidecar: {}", e))?
+    let output = get_binary_command(app, "pandoc")
+        .await?
         .args(vec![input_str, "-o", output_str])
         .output()
         .await
@@ -617,6 +664,260 @@ async fn run_data_conversion(
                 .map_err(|e| format!("JSON serialization error: {}", e))?;
             std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
         }
+        ("xml", "json") => {
+            let content = std::fs::read_to_string(input)
+                .map_err(|e| format!("Failed to read input file: {}", e))?;
+            let value: Value = quick_xml::de::from_str(&content).map_err(|e| format!("XML parse error: {}", e))?;
+            let json = serde_json::to_string_pretty(&value)
+                .map_err(|e| format!("JSON serialization error: {}", e))?;
+            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("json", "xml") => {
+            let value: Value = serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
+            let mut xml_out = String::new();
+            xml_out.push_str("<root>\n");
+            fn value_to_xml(v: &Value, out: &mut String, indent: usize) {
+                let ind = " ".repeat(indent);
+                match v {
+                    Value::Object(map) => {
+                        for (k, val) in map {
+                            out.push_str(&format!("{}<{}>", ind, k));
+                            if val.is_object() || val.is_array() {
+                                out.push('\n');
+                                value_to_xml(val, out, indent + 2);
+                                out.push_str(&format!("{}</{}>\n", ind, k));
+                            } else {
+                                let val_str = match val {
+                                    Value::String(s) => s.clone(),
+                                    _ => val.to_string()
+                                };
+                                out.push_str(&val_str.replace('&', "&amp;").replace('<', "&lt;"));
+                                out.push_str(&format!("</{}>\n", k));
+                            }
+                        }
+                    }
+                    Value::Array(arr) => {
+                        for val in arr {
+                            out.push_str(&format!("{}<item>", ind));
+                            if val.is_object() || val.is_array() {
+                                out.push('\n');
+                                value_to_xml(val, out, indent + 2);
+                                out.push_str(&format!("{}</item>\n", ind));
+                            } else {
+                                let val_str = match val {
+                                    Value::String(s) => s.clone(),
+                                    _ => val.to_string()
+                                };
+                                out.push_str(&val_str.replace('&', "&amp;").replace('<', "&lt;"));
+                                out.push_str("</item>\n");
+                            }
+                        }
+                    }
+                    _ => {
+                        let val_str = match v {
+                            Value::String(s) => s.clone(),
+                            _ => v.to_string()
+                        };
+                        out.push_str(&format!("{}{}\n", ind, val_str.replace('&', "&amp;").replace('<', "&lt;")));
+                    }
+                }
+            }
+            value_to_xml(&value, &mut xml_out, 2);
+            xml_out.push_str("</root>");
+            std::fs::write(output, format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}", xml_out))
+                .map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("xlsx", "csv") | ("xlsx", "json") => {
+            let mut excel: Xlsx<_> = calamine::open_workbook(input)
+                .map_err(|e| format!("Failed to open XLSX: {}", e))?;
+            let sheet_name = excel.sheet_names().get(0).ok_or("No sheets found in XLSX")?.clone();
+            let range = excel.worksheet_range(&sheet_name).map_err(|e| format!("Could not read worksheet: {}", e))?;
+
+            if target_ext == "csv" {
+                let mut wtr = csv::Writer::from_path(output)
+                    .map_err(|e| format!("Failed to create CSV writer: {}", e))?;
+                for row in range.rows() {
+                    let record: Vec<String> = row.iter().map(|c| c.to_string()).collect();
+                    wtr.write_record(&record).map_err(|e| format!("CSV write error: {}", e))?;
+                }
+                wtr.flush().map_err(|e| format!("Failed to flush CSV: {}", e))?;
+            } else {
+                let mut items = Vec::new();
+                let headers: Vec<String> = range.rows().next().ok_or("Empty sheet")?.iter().map(|c| c.to_string()).collect();
+                for row in range.rows().skip(1) {
+                    let mut map = serde_json::Map::new();
+                    for (header, cell) in headers.iter().zip(row.iter()) {
+                        map.insert(header.clone(), Value::String(cell.to_string()));
+                    }
+                    items.push(Value::Object(map));
+                }
+                let json = serde_json::to_string_pretty(&items)
+                    .map_err(|e| format!("JSON serialization error: {}", e))?;
+                std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+            }
+        }
+        ("csv", "xlsx") | ("json", "xlsx") => {
+            let mut workbook = Workbook::new();
+            let worksheet = workbook.add_worksheet();
+
+            if input_ext == "csv" {
+                let mut csv_reader = csv::Reader::from_reader(reader);
+                let headers = csv_reader.headers().map_err(|e| format!("CSV headers error: {}", e))?;
+                for (col, header) in headers.iter().enumerate() {
+                    worksheet.write(0, col as u16, header).map_err(|e| format!("XLSX write error: {}", e))?;
+                }
+                for (row_idx, result) in csv_reader.records().enumerate() {
+                    let record = result.map_err(|e| format!("CSV record error: {}", e))?;
+                    for (col_idx, val) in record.iter().enumerate() {
+                        worksheet.write((row_idx + 1) as u32, col_idx as u16, val).map_err(|e| format!("XLSX write error: {}", e))?;
+                    }
+                }
+            } else {
+                let items: Value = serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
+                if let Some(arr) = items.as_array() {
+                    if !arr.is_empty() {
+                        let mut headers = Vec::new();
+                        if let Some(obj) = arr[0].as_object() {
+                            headers = obj.keys().cloned().collect::<Vec<_>>();
+                            for (col, header) in headers.iter().enumerate() {
+                                worksheet.write(0, col as u16, header).map_err(|e| format!("XLSX write error: {}", e))?;
+                            }
+                        }
+                        for (row_idx, item) in arr.iter().enumerate() {
+                            if let Some(obj) = item.as_object() {
+                                for (col_idx, header) in headers.iter().enumerate() {
+                                    if let Some(val) = obj.get(header) {
+                                        worksheet.write((row_idx + 1) as u32, col_idx as u16, val.to_string()).map_err(|e| format!("XLSX write error: {}", e))?;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            workbook.save(output).map_err(|e| format!("Failed to save XLSX: {}", e))?;
+        }
+        ("csv", "sql") => {
+            let mut csv_reader = csv::Reader::from_reader(reader);
+            let headers = csv_reader.headers().map_err(|e| format!("CSV headers error: {}", e))?.clone();
+            let table_name = input.file_stem().and_then(|s| s.to_str())
+                .unwrap_or("imported_table")
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '_')
+                .collect::<String>();
+            let mut sql = format!("CREATE TABLE IF NOT EXISTS `{}` (\n", table_name);
+            for (i, h) in headers.iter().enumerate() {
+                let safe_h = h.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect::<String>();
+                sql.push_str(&format!("  `{}` TEXT{}", safe_h, if i < headers.len() - 1 { "," } else { "" }));
+                sql.push('\n');
+            }
+            sql.push_str(");\n\n");
+
+            for result in csv_reader.records() {
+                let record = result.map_err(|e| format!("CSV record error: {}", e))?;
+                sql.push_str(&format!("INSERT INTO `{}` VALUES (", table_name));
+                for (i, val) in record.iter().enumerate() {
+                    sql.push_str(&format!("'{}'{}", val.replace('\'', "''"), if i < record.len() - 1 { ", " } else { "" }));
+                }
+                sql.push_str(");\n");
+            }
+            std::fs::write(output, sql).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("log", "json") => {
+            let mut content = String::new();
+            File::open(input).map_err(|e| format!("Open log error: {}", e))?.read_to_string(&mut content)
+                .map_err(|e| format!("Read log error: {}", e))?;
+            let mut items = Vec::new();
+            for line in content.lines() {
+                if line.trim().is_empty() { continue; }
+                let mut map = serde_json::Map::new();
+                map.insert("raw".to_string(), Value::String(line.to_string()));
+                // Basic parsing attempt: look for timestamp or level
+                if let Some(caps) = regex::Regex::new(r"(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\s+(\w+)\s+(.*)").unwrap().captures(line) {
+                    map.insert("timestamp".to_string(), Value::String(caps[1].to_string()));
+                    map.insert("level".to_string(), Value::String(caps[2].to_string()));
+                    map.insert("message".to_string(), Value::String(caps[3].to_string()));
+                }
+                items.push(Value::Object(map));
+            }
+            let json = serde_json::to_string_pretty(&items).unwrap();
+            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("sqlite", "json") | ("db", "json") => {
+            let conn = Connection::open(input).map_err(|e| format!("Failed to open SQLite: {}", e))?;
+            let mut table_names = Vec::new();
+            let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'").map_err(|e| format!("SQL error: {}", e))?;
+            let rows = stmt.query_map([], |row| row.get::<_, String>(0)).map_err(|e| format!("SQL error: {}", e))?;
+            for name in rows {
+                table_names.push(name.map_err(|e| format!("SQL error: {}", e))?);
+            }
+
+            let mut db_dump = serde_json::Map::new();
+            for table in table_names {
+                let mut table_data = Vec::new();
+                let mut stmt = conn.prepare(&format!("SELECT * FROM {}", table)).map_err(|e| format!("SQL error: {}", e))?;
+                let column_names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+                let mut rows = stmt.query([]).map_err(|e| format!("SQL error: {}", e))?;
+                while let Some(row) = rows.next().map_err(|e| format!("SQL error: {}", e))? {
+                    let mut row_map = serde_json::Map::new();
+                    for (i, col) in column_names.iter().enumerate() {
+                        let val: Value = match row.get_ref(i).unwrap() {
+                            rusqlite::types::ValueRef::Null => Value::Null,
+                            rusqlite::types::ValueRef::Integer(i) => Value::Number(i.into()),
+                            rusqlite::types::ValueRef::Real(f) => serde_json::Number::from_f64(f).map(Value::Number).unwrap_or(Value::Null),
+                            rusqlite::types::ValueRef::Text(t) => Value::String(String::from_utf8_lossy(t).into_owned()),
+                            rusqlite::types::ValueRef::Blob(b) => Value::String(base64::encode(b)),
+                        };
+                        row_map.insert(col.clone(), val);
+                    }
+                    table_data.push(Value::Object(row_map));
+                }
+                db_dump.insert(table, Value::Array(table_data));
+            }
+            let json = serde_json::to_string_pretty(&db_dump).unwrap();
+            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("bib", "json") => {
+            let content = std::fs::read_to_string(input).map_err(|e| format!("Read BibTeX error: {}", e))?;
+            let mut entries = Vec::new();
+            let entry_re = regex::Regex::new(r"@(\w+)\s*\{\s*([^,]+),([\s\S]*?)\}").unwrap();
+            for caps in entry_re.captures_iter(&content) {
+                let mut map = serde_json::Map::new();
+                map.insert("type".to_string(), Value::String(caps[1].to_string()));
+                map.insert("id".to_string(), Value::String(caps[2].trim().to_string()));
+                let fields_str = &caps[3];
+                // Simplify field regex: key = {val} or key = "val" or key = val
+                let field_re = regex::Regex::new(r#"(\w+)\s*=\s*[\{"]?([\s\S]*?)[\}"]?(?:,|$)"#).unwrap();
+                for f_caps in field_re.captures_iter(fields_str) {
+                    let key = f_caps[1].to_lowercase();
+                    if key == "type" || key == "id" { continue; }
+                    map.insert(key, Value::String(f_caps[2].trim().trim_matches(|c| c == '{' || c == '}' || c == '"').to_string()));
+                }
+                entries.push(Value::Object(map));
+            }
+            let json = serde_json::to_string_pretty(&entries).unwrap();
+            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
+        ("ics", "json") => {
+            let content = std::fs::read_to_string(input).map_err(|e| format!("Read ICS error: {}", e))?;
+            let mut events = Vec::new();
+            let mut current_event = None;
+            for line in content.lines() {
+                if line == "BEGIN:VEVENT" {
+                    current_event = Some(serde_json::Map::new());
+                } else if line == "END:VEVENT" {
+                    if let Some(ev) = current_event.take() {
+                        events.push(Value::Object(ev));
+                    }
+                } else if let Some(ev) = current_event.as_mut() {
+                    if let Some((key, val)) = line.split_once(':') {
+                        ev.insert(key.to_lowercase(), Value::String(val.to_string()));
+                    }
+                }
+            }
+            let json = serde_json::to_string_pretty(&events).unwrap();
+            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+        }
         _ => {
             return Err(format!(
                 "Unsupported data conversion: {} to {}",
@@ -664,10 +965,24 @@ async fn run_archive_conversion(
             fs::create_dir_all(&out_dir)
                 .map_err(|e| format!("Failed to create output directory: {}", e))?;
 
+            let mut total_extracted_size: u64 = 0;
+            let max_total_size: u64 = 5 * 1024 * 1024 * 1024; // 5GB limit for safety
+            let max_files = 10000;
+
+            if archive.len() > max_files {
+                return Err(format!("Zip archive contains too many files (max {})", max_files));
+            }
+
             for i in 0..archive.len() {
                 let mut file = archive
                     .by_index(i)
                     .map_err(|e| format!("Failed to read zip entry: {}", e))?;
+
+                total_extracted_size += file.size();
+                if total_extracted_size > max_total_size {
+                    return Err("Zip extraction exceeded safety size limit (5GB)".to_string());
+                }
+
                 let outpath = match file.enclosed_name() {
                     Some(path) => out_dir.join(path),
                     None => continue,
@@ -829,6 +1144,77 @@ mod tests {
         assert!(extracted_file.exists());
         let content = fs::read_to_string(extracted_file).unwrap();
         assert_eq!(content, "hello world");
+    }
+
+    #[tokio::test]
+    async fn test_xml_to_json() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("test.xml");
+        let output_path = dir.path().join("test.json");
+
+        fs::write(&input_path, r#"<root><item id="1">Hello</item></root>"#).unwrap();
+
+        run_data_conversion(&input_path, &output_path, "xml", "json")
+            .await
+            .unwrap();
+
+        let output_content = fs::read_to_string(output_path).unwrap();
+        let json: Value = serde_json::from_str(&output_content).unwrap();
+        // quick-xml might deserialize as {"item": {"@id": "1", "$value": "Hello"}}
+        // or just {"item": {"id": "1", "#text": "Hello"}} depending on version/config
+        assert!(json.get("item").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_json_to_xml() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("test.json");
+        let output_path = dir.path().join("test.xml");
+
+        fs::write(&input_path, r#"{"name": "test", "value": 123}"#).unwrap();
+
+        run_data_conversion(&input_path, &output_path, "json", "xml")
+            .await
+            .unwrap();
+
+        let content = fs::read_to_string(output_path).unwrap();
+        assert!(content.contains("<name>test</name>"));
+        assert!(content.contains("<value>123</value>"));
+    }
+
+    #[tokio::test]
+    async fn test_csv_to_sql() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("my_table.csv");
+        let output_path = dir.path().join("test.sql");
+
+        fs::write(&input_path, "id,name\n1,O'Reilly\n2,Bob").unwrap();
+
+        run_data_conversion(&input_path, &output_path, "csv", "sql")
+            .await
+            .unwrap();
+
+        let content = fs::read_to_string(output_path).unwrap();
+        assert!(content.contains("CREATE TABLE IF NOT EXISTS `my_table`"));
+        assert!(content.contains("INSERT INTO `my_table` VALUES ('1', 'O''Reilly');"));
+    }
+
+    #[tokio::test]
+    async fn test_bib_to_json() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("test.bib");
+        let output_path = dir.path().join("test.json");
+
+        fs::write(&input_path, "@article{sample, author={John Doe}, title={A Paper}\n}").unwrap();
+
+        run_data_conversion(&input_path, &output_path, "bib", "json")
+            .await
+            .unwrap();
+
+        let content = fs::read_to_string(output_path).unwrap();
+        let json: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(json[0]["type"], "article");
+        assert!(json[0]["author"].as_str().unwrap().contains("John Doe"));
     }
 
     #[tokio::test]

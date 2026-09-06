@@ -68,6 +68,9 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ isOpen, onClos
                                 <p className="text-[11px] text-amber-200/60 leading-relaxed">
                                     Some conversion engines are missing. File2File will try to use alternatives from your system, but performance and format support might be limited.
                                 </p>
+                                <div className="mt-2 p-2 rounded-lg bg-black/20 text-[10px] text-amber-200/40 font-mono">
+                                    Tip: Place missing binaries in your App Data folder under "bin/" to enable them.
+                                </div>
                             </div>
                         </div>
                     )}

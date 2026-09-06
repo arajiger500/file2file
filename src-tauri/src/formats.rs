@@ -70,7 +70,8 @@ pub fn get_category_for_extension(ext: &str) -> FileCategory {
             FileCategory::Document
         }
         "svg" | "eps" | "ai" => FileCategory::Vector,
-        "csv" | "json" | "xlsx" | "xls" | "yaml" | "xml" | "toml" | "sql" => FileCategory::Data,
+        "csv" | "json" | "xlsx" | "xls" | "yaml" | "xml" | "toml" | "sql" | "sqlite" | "db"
+        | "bib" | "ics" | "log" => FileCategory::Data,
         "zip" | "tar" | "gz" | "7z" | "rar" | "directory" => FileCategory::Archive,
         _ => FileCategory::Unknown,
     }
@@ -120,11 +121,18 @@ pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
             }
         }
         FileCategory::Data => {
-            let targets = ["json", "csv", "yaml", "toml", "xml"];
+            let targets = [
+                "json", "csv", "yaml", "toml", "xml", "xlsx", "sql", "sqlite", "bib", "ics", "log",
+            ];
             for t in targets {
                 if t == input_ext.to_lowercase() {
                     continue;
                 }
+                // Filter out non-sensical targets (e.g. bib -> sqlite)
+                if (input_ext == "log" || input_ext == "bib" || input_ext == "ics" || input_ext == "sqlite" || input_ext == "db") && t != "json" {
+                    continue;
+                }
+
                 catalog.push(FormatOption {
                     extension: t.to_string(),
                     name: format!("{} Data", t.to_uppercase()),

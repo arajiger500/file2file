@@ -20,7 +20,7 @@ pub struct HardwareInfo {
     pub detected_gpus: Vec<String>,
 }
 
-use tauri_plugin_shell::ShellExt;
+use crate::sidecar::get_binary_command;
 
 pub async fn detect_hardware_capabilities(app: Option<tauri::AppHandle>) -> HardwareInfo {
     let cpu_cores = num_cpus::get();
@@ -54,8 +54,8 @@ pub async fn detect_hardware_capabilities(app: Option<tauri::AppHandle>) -> Hard
 
     // Try querying ffmpeg encoders if available on PATH or sidecar
     let ffmpeg_output = if let Some(app) = app {
-        if let Ok(sidecar) = app.shell().sidecar("ffmpeg") {
-            sidecar.args(["-encoders"]).output().await
+        if let Ok(cmd) = get_binary_command(&app, "ffmpeg").await {
+            cmd.args(["-encoders"]).output().await
                 .ok()
                 .and_then(|out| String::from_utf8(out.stdout).ok())
                 .unwrap_or_default()

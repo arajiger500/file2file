@@ -25,6 +25,10 @@ toml = "0.8"
 zip = "2.2"
 tar = "0.4"
 flate2 = "1.0"
+quick-xml = { version = "0.36", features = ["serialize"] }
+calamine = "0.26"
+rust_xlsxwriter = "0.99"
+rusqlite = { version = "0.32", features = ["bundled"] }
 tokio = { version = "1", features = ["full"] }
 num_cpus = "1.16"
 thiserror = "1.0"
