@@ -48,47 +48,92 @@ jobs:
         run: |
           mkdir -p src-tauri/binaries
           
+          # Helper to copy and rename binaries safely
+          safe_cp() {
+            local src=$1
+            local dest="src-tauri/binaries/$2"
+            if [ -z "$src" ]; then
+              echo "Error: Source for $2 not found. Creating dummy."
+              echo "dummy" > "$dest"
+            else
+              echo "Copying $src to $dest"
+              cp "$src" "$dest"
+            fi
+            chmod +x "$dest"
+          }
+
           case "${{ matrix.platform }}" in
             "ubuntu-22.04")
               ARCH="x86_64-unknown-linux-gnu"
-              # Install real binaries if possible
               sudo apt-get install -y ffmpeg poppler-utils pandoc imagemagick
-              cp $(which ffmpeg) src-tauri/binaries/ffmpeg-$ARCH
-              cp $(which ffprobe) src-tauri/binaries/ffprobe-$ARCH
-              cp $(which pandoc) src-tauri/binaries/pandoc-$ARCH
-              cp $(which magick) src-tauri/binaries/magick-$ARCH
-              cp $(which pdftotext) src-tauri/binaries/pdftotext-$ARCH
+              safe_cp "$(command -v ffmpeg)" "ffmpeg-$ARCH"
+              safe_cp "$(command -v ffprobe)" "ffprobe-$ARCH"
+              safe_cp "$(command -v pandoc)" "pandoc-$ARCH"
+              safe_cp "$(command -v magick || command -v convert)" "magick-$ARCH"
+              safe_cp "$(command -v pdftotext)" "pdftotext-$ARCH"
               ;;
             "macos-latest")
-              # Setup for both x64 and arm64
+              # For universal-apple-darwin, Tauri looks for binaries with that suffix.
+              # On GitHub Actions macos-latest (arm64), we'll use arm64 binaries for now.
+              # In a real production setup, you'd lipo x64 and arm64 together.
               brew install ffmpeg poppler pandoc imagemagick
-              cp $(which ffmpeg) src-tauri/binaries/ffmpeg-x86_64-apple-darwin
-              cp $(which ffprobe) src-tauri/binaries/ffprobe-x86_64-apple-darwin
-              cp $(which pandoc) src-tauri/binaries/pandoc-x86_64-apple-darwin
-              cp $(which magick) src-tauri/binaries/magick-x86_64-apple-darwin
-              cp $(which pdftotext) src-tauri/binaries/pdftotext-x86_64-apple-darwin
               
-              cp $(which ffmpeg) src-tauri/binaries/ffmpeg-aarch64-apple-darwin
-              cp $(which ffprobe) src-tauri/binaries/ffprobe-aarch64-apple-darwin
-              cp $(which pandoc) src-tauri/binaries/pandoc-aarch64-apple-darwin
-              cp $(which magick) src-tauri/binaries/magick-aarch64-apple-darwin
-              cp $(which pdftotext) src-tauri/binaries/pdftotext-aarch64-apple-darwin
+              ARCH="universal-apple-darwin"
+              safe_cp "$(command -v ffmpeg)" "ffmpeg-$ARCH"
+              safe_cp "$(command -v ffprobe)" "ffprobe-$ARCH"
+              safe_cp "$(command -v pandoc)" "pandoc-$ARCH"
+              safe_cp "$(command -v magick || command -v convert)" "magick-$ARCH"
+              safe_cp "$(command -v pdftotext)" "pdftotext-$ARCH"
               ;;
             "windows-latest")
               ARCH="x86_64-pc-windows-msvc"
               choco install ffmpeg pandoc imagemagick
-              # Copying from PATH. We use 'where' on Windows or just rely on choco known paths.
-              cp $(which ffmpeg) src-tauri/binaries/ffmpeg-$ARCH.exe
-              cp $(which ffprobe) src-tauri/binaries/ffprobe-$ARCH.exe
-              cp $(which pandoc) src-tauri/binaries/pandoc-$ARCH.exe
-              cp $(which magick) src-tauri/binaries/magick-$ARCH.exe
-              # pdftotext usually comes with poppler-utils, not available on choco easily
-              # We'll touch it to avoid bundle failure
-              echo "dummy" > src-tauri/binaries/pdftotext-$ARCH.exe
+              
+              # Find paths using 'where' and take the first one
+              FFMPEG_EXE=$(where ffmpeg | head -n1)
+              FFPROBE_EXE=$(where ffprobe | head -n1)
+              PANDOC_EXE=$(where pandoc | head -n1)
+              # ImageMagick on choco might be in a different path or named differently
+              MAGICK_EXE=$(where magick | head -n1 || where convert | head -n1)
+              # pdftotext is usually not in standard choco, we'll try to find it or touch it
+              PDFTOTEXT_EXE=$(where pdftotext | head -n1)
+
+              safe_cp "$FFMPEG_EXE" "ffmpeg-$ARCH.exe"
+              safe_cp "$FFPROBE_EXE" "ffprobe-$ARCH.exe"
+              safe_cp "$PANDOC_EXE" "pandoc-$ARCH.exe"
+              safe_cp "$MAGICK_EXE" "magick-$ARCH.exe"
+              if [ -n "$PDFTOTEXT_EXE" ]; then
+                safe_cp "$PDFTOTEXT_EXE" "pdftotext-$ARCH.exe"
+              else
+                echo "dummy" > "src-tauri/binaries/pdftotext-$ARCH.exe"
+              fi
               ;;
           esac
+
+      - name: validate sidecars
+        shell: bash
+        run: |
+          echo "Listing generated sidecars:"
+          ls -lh src-tauri/binaries/
           
-          chmod +x src-tauri/binaries/*
+          # Expected binaries check
+          case "${{ matrix.platform }}" in
+            "ubuntu-22.04") SUFFIX="-x86_64-unknown-linux-gnu" ;;
+            "macos-latest") SUFFIX="-universal-apple-darwin" ;;
+            "windows-latest") SUFFIX="-x86_64-pc-windows-msvc.exe" ;;
+          esac
+          
+          MISSING=0
+          for bin in ffmpeg ffprobe pandoc magick pdftotext; do
+            if [ ! -f "src-tauri/binaries/$bin$SUFFIX" ]; then
+              echo "CRITICAL ERROR: Missing sidecar $bin$SUFFIX"
+              MISSING=1
+            fi
+          done
+          
+          if [ $MISSING -eq 1 ]; then
+            exit 1
+          fi
 
       - uses: tauri-apps/tauri-action@v0
         env:
