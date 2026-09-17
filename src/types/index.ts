@@ -104,6 +104,7 @@ export interface ConversionResult {
     elapsed_ms: number;
     download_url?: string;
     error?: string;
+    warnings?: string[];
 }
 
 export interface FileProbeResult {

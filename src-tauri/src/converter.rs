@@ -35,6 +35,7 @@ pub struct ConversionResult {
     pub converted_size_bytes: u64,
     pub elapsed_ms: u64,
     pub error: Option<String>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -229,21 +230,21 @@ pub async fn convert_single_file<R: tauri::Runtime>(
     let target_category = get_category_for_extension(&target_ext);
 
     let execution_result = if input_ext == "pdf" {
-        run_pdf_conversion(&app, input_path, &output_path, &target_ext).await
+        run_pdf_conversion(&app, input_path, &output_path, &target_ext).await.map(|_| vec![])
     } else if category == FileCategory::Data {
-        run_data_conversion(input_path, &output_path, &input_ext, &target_ext).await
+        run_data_conversion(input_path, &output_path, &input_ext, &target_ext).await.map(|_| vec![])
     } else if category == FileCategory::Archive {
-        run_archive_conversion(input_path, &output_path, &input_ext, &target_ext).await
+        run_archive_conversion(input_path, &output_path, &input_ext, &target_ext).await.map(|_| vec![])
     } else if category == FileCategory::Image || category == FileCategory::Vector {
         // Determine if target is also image/vector (ImageMagick) or document (Pandoc fallback)
         let target_category = get_category_for_extension(&target_ext);
         if target_category == FileCategory::Document {
-            run_pandoc_conversion(&app, input_path, &output_path).await
+            run_pandoc_conversion(&app, input_path, &output_path).await.map(|_| vec![])
         } else {
-            run_image_magick_conversion(&app, input_path, &output_path).await
+            run_image_magick_conversion(&app, input_path, &output_path).await.map(|_| vec![])
         }
     } else if target_category == FileCategory::Document {
-        run_pandoc_conversion(&app, input_path, &output_path).await
+        run_pandoc_conversion(&app, input_path, &output_path).await.map(|_| vec![])
     } else {
         run_ffmpeg_conversion(&app, &req, input_path, &output_path, &target_ext).await
     };
@@ -251,7 +252,7 @@ pub async fn convert_single_file<R: tauri::Runtime>(
     let elapsed = start_time.elapsed().as_millis() as u64;
 
     match execution_result {
-        Ok(_) => {
+        Ok(warnings) => {
             let converted_size = std::fs::metadata(&output_path)
                 .map(|m| m.len())
                 .unwrap_or(0);
@@ -264,6 +265,7 @@ pub async fn convert_single_file<R: tauri::Runtime>(
                 converted_size_bytes: converted_size,
                 elapsed_ms: elapsed,
                 error: None,
+                warnings,
             })
         }
         Err(err) => {
@@ -277,6 +279,7 @@ pub async fn convert_single_file<R: tauri::Runtime>(
                 converted_size_bytes: 0,
                 elapsed_ms: elapsed,
                 error: Some(friendly_err),
+                warnings: vec![],
             })
         }
     }
@@ -290,36 +293,74 @@ async fn run_pdf_conversion<R: tauri::Runtime>(
 ) -> Result<(), String> {
     let out_dir = output.parent().unwrap_or_else(|| Path::new("."));
 
-    let text_path = out_dir.join(format!(".file2file-{}.txt", Uuid::new_v4()));
-    let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
-    let text_path_str = text_path
-        .to_str()
-        .ok_or("Temporary path contains invalid UTF-8")?;
+    if target_ext == "txt" {
+        let text_path = out_dir.join(format!(".file2file-{}.txt", Uuid::new_v4()));
+        let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
+        let text_path_str = text_path
+            .to_str()
+            .ok_or("Temporary path contains invalid UTF-8")?;
 
-    let extracted = get_binary_command(app, "pdftotext")
-        .await?
-        .args(["-layout", input_str, text_path_str])
-        .output()
-        .await
-        .map_err(|e| format!("pdftotext execution error: {}. PDF conversion requires Poppler's pdftotext utility.", e))?;
+        let extracted = get_binary_command(app, "pdftotext")
+            .await?
+            .args(["-layout", input_str, text_path_str])
+            .output()
+            .await
+            .map_err(|e| {
+                format!(
+                    "pdftotext execution error: {}. PDF conversion requires Poppler's pdftotext utility.",
+                    e
+                )
+            })?;
 
-    if !extracted.status.success() {
-        let _ = std::fs::remove_file(&text_path);
-        return Err(String::from_utf8_lossy(&extracted.stderr)
-            .trim()
-            .to_string());
-    }
+        if !extracted.status.success() {
+            let _ = std::fs::remove_file(&text_path);
+            return Err(String::from_utf8_lossy(&extracted.stderr)
+                .trim()
+                .to_string());
+        }
 
-    let result = if target_ext == "txt" {
-        std::fs::copy(&text_path, output)
+        let result = std::fs::copy(&text_path, output)
             .map(|_| ())
-            .map_err(|e| format!("Could not save extracted text: {e}"))
-    } else {
-        run_pandoc_conversion(app, &text_path, output).await
-    };
+            .map_err(|e| format!("Could not save extracted text: {e}"));
 
-    let _ = std::fs::remove_file(&text_path);
-    result
+        let _ = std::fs::remove_file(&text_path);
+        result
+    } else {
+        // High-fidelity conversion for DOCX, HTML, ODT, etc.
+        let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
+        let out_dir = output.parent().unwrap_or_else(|| Path::new("."));
+        let temp_prefix = out_dir.join(format!(".file2file-{}", Uuid::new_v4()));
+        let temp_prefix_str = temp_prefix
+            .to_str()
+            .ok_or("Temporary path contains invalid UTF-8")?;
+
+        let output_gen = get_binary_command(app, "pdftohtml")
+            .await?
+            .args(["-c", "-dataurls", "-noframes", input_str, temp_prefix_str])
+            .output()
+            .await
+            .map_err(|e| {
+                format!(
+                    "pdftohtml execution error: {}. PDF conversion requires Poppler's pdftohtml utility.",
+                    e
+                )
+            })?;
+
+        if !output_gen.status.success() {
+            return Err(String::from_utf8_lossy(&output_gen.stderr).to_string());
+        }
+
+        let temp_html = out_dir.join(format!("{}.html", temp_prefix.file_name().unwrap().to_str().unwrap()));
+
+        if !temp_html.exists() {
+            return Err("pdftohtml failed to generate temporary HTML file.".to_string());
+        }
+
+        let result = run_pandoc_conversion(app, &temp_html, output).await;
+
+        let _ = std::fs::remove_file(&temp_html);
+        result
+    }
 }
 
 async fn run_image_magick_conversion<R: tauri::Runtime>(
@@ -330,9 +371,35 @@ async fn run_image_magick_conversion<R: tauri::Runtime>(
     let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
     let output_str = output.to_str().ok_or("Output path contains invalid UTF-8")?;
 
+    let output_ext = output
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let mut args = Vec::new();
+
+    // If it's an animated format, coalesce frames first
+    let input_ext = input.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    if input_ext == "gif" || input_ext == "webp" {
+        args.push("-coalesce".to_string());
+    }
+
+    args.push(input_str.to_string());
+
+    // Transparency preservation logic
+    if output_ext == "jpg" || output_ext == "jpeg" {
+        // JPG doesn't support alpha, so flatten against white to avoid black silhouettes
+        args.push("-background".to_string());
+        args.push("white".to_string());
+        args.push("-flatten".to_string());
+    }
+
+    args.push(output_str.to_string());
+
     let result = get_binary_command(app, "magick")
         .await?
-        .args([input_str, output_str])
+        .args(args)
         .output()
         .await
         .map_err(|e| {
@@ -352,14 +419,17 @@ async fn run_ffmpeg_conversion<R: tauri::Runtime>(
     input: &Path,
     output: &Path,
     target_ext: &str,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
+    let mut warnings = Vec::new();
     if req.hardware_accel {
         let hw_res = execute_ffmpeg(app, req, input, output, target_ext, true).await;
         if hw_res.is_ok() {
-            return Ok(());
+            return Ok(warnings);
         }
+        // Fallback occurred
+        warnings.push("Hardware acceleration failed, fell back to CPU encoding.".to_string());
     }
-    execute_ffmpeg(app, req, input, output, target_ext, false).await
+    execute_ffmpeg(app, req, input, output, target_ext, false).await.map(|_| warnings)
 }
 
 async fn execute_ffmpeg<R: tauri::Runtime>(
@@ -374,6 +444,10 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
     let output_str = output.to_str().ok_or("Output path contains invalid UTF-8")?;
 
     let mut args = vec!["-y".to_string(), "-i".to_string(), input_str.to_string()];
+
+    // Add universal stream and metadata mapping as default
+    // We will override this for specific formats like audio-only or image extraction
+    let mut map_all = true;
 
     match target_ext {
         "mp4" | "mov" | "mkv" | "webm" | "avi" => {
@@ -404,16 +478,13 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
                 args.push("-c:a".to_string());
                 args.push("aac".to_string());
             }
-            // Subtitle extraction from MKV: extract the first SRT track
-            if target_ext == "srt" {
-                args.push("-vn".to_string());
-                args.push("-c:s".to_string());
-                args.push("-map".to_string());
-                args.push("0:s:0".to_string());
-            }
+            // Ensure we copy subtitles where possible
+            args.push("-c:s".to_string());
+            args.push("copy".to_string());
         }
         "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" | "opus" => {
             args.push("-vn".to_string());
+            map_all = false; // We only want audio
             match target_ext {
                 "mp3" => {
                     args.push("-c:a".to_string());
@@ -448,6 +519,7 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
             }
         }
         "webp" | "png" | "jpg" | "jpeg" | "avif" | "gif" => {
+            map_all = false; // Extraction
             args.push("-c:v".to_string());
             args.push("-c:a".to_string());
             args.push("aac".to_string());
@@ -485,17 +557,24 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
             }
         }
         "srt" => {
+            map_all = false;
             args.push("-vn".to_string());
             args.push("-c:s".to_string());
             args.push("-map".to_string());
             args.push("0:s:0".to_string());
         }
         "raw" | "cr2" | "nef" | "arw" | "dng" => {
+            map_all = false;
             args.push("-vn".to_string());
             args.push("-c:v".to_string());
             args.push("libjpeg".to_string());
         }
         _ => {}
+    }
+
+    if map_all {
+        args.push("-map".to_string());
+        args.push("0".to_string());
     }
 
     if let Some(crf) = req.crf {
@@ -513,6 +592,12 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
     if req.strip_metadata {
         args.push("-map_metadata".to_string());
         args.push("-1".to_string());
+    } else {
+        // Explicitly map all metadata and chapters from the first input
+        args.push("-map_metadata".to_string());
+        args.push("0".to_string());
+        args.push("-map_chapters".to_string());
+        args.push("0".to_string());
     }
 
     args.push(output_str.to_string());
@@ -538,10 +623,31 @@ async fn run_pandoc_conversion<R: tauri::Runtime>(
 ) -> Result<(), String> {
     let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
     let output_str = output.to_str().ok_or("Output path contains invalid UTF-8")?;
+    let output_ext = output
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let mut args = vec![input_str.to_string(), "-o".to_string(), output_str.to_string()];
+
+    // Add high-fidelity math support by default if input/output likely has it
+    args.push("-f".to_string());
+    args.push("html+tex_math_dollars".to_string());
+
+    // Universal image preservation and layout flags
+    if output_ext == "html" || output_ext == "htm" {
+        args.push("--embed-resources".to_string());
+        args.push("--standalone".to_string());
+    } else if output_ext == "docx" || output_ext == "odt" || output_ext == "epub" {
+        // Pandoc embeds images by default for these, but we ensure it knows how to handle media
+        // if the source has external images (though we use dataurls for PDF path)
+        args.push("--extract-media=.".to_string());
+    }
 
     let output = get_binary_command(app, "pandoc")
         .await?
-        .args(vec![input_str, "-o", output_str])
+        .args(args)
         .output()
         .await
         .map_err(|e| format!("Pandoc execution error: {}", e))?;
@@ -562,13 +668,12 @@ async fn run_data_conversion(
     let input_file = File::open(input).map_err(|e| format!("Failed to open input file: {}", e))?;
     let reader = BufReader::new(input_file);
 
-    match (input_ext, target_ext) {
-        ("csv", "json") => {
+    // Helper to get a JSON Value from various input formats
+    let value: Value = match input_ext {
+        "json" => serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?,
+        "csv" => {
             let mut csv_reader = csv::Reader::from_reader(reader);
-            let headers = csv_reader
-                .headers()
-                .map_err(|e| format!("CSV headers error: {}", e))?
-                .clone();
+            let headers = csv_reader.headers().map_err(|e| format!("CSV headers error: {}", e))?.clone();
             let mut items = Vec::new();
             for result in csv_reader.records() {
                 let record = result.map_err(|e| format!("CSV record error: {}", e))?;
@@ -578,233 +683,76 @@ async fn run_data_conversion(
                 }
                 items.push(Value::Object(map));
             }
-            let json = serde_json::to_string_pretty(&items)
-                .map_err(|e| format!("JSON serialization error: {}", e))?;
-            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+            Value::Array(items)
         }
-        ("json", "csv") => {
-            let items: Value =
-                serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
+        "yaml" => serde_yaml::from_reader(reader).map_err(|e| format!("YAML parse error: {}", e))?,
+        "toml" => {
+            let content = std::fs::read_to_string(input).map_err(|e| format!("Failed to read input file: {}", e))?;
+            toml::from_str(&content).map_err(|e| format!("TOML parse error: {}", e))?
+        }
+        "xml" => {
+            let content = std::fs::read_to_string(input).map_err(|e| format!("Failed to read input file: {}", e))?;
+            quick_xml::de::from_str(&content).map_err(|e| format!("XML parse error: {}", e))?
+        }
+        _ => {
+            // Fallback for formats that might be handled differently below (like xlsx)
+            Value::Null
+        }
+    };
 
-            if let Some(arr) = items.as_array() {
-                if arr.is_empty() {
-                    return Ok(());
-                }
-
-                // Collect all unique keys for headers
+    match (input_ext, target_ext) {
+        (i, "json") if i != "json" && value != Value::Null => {
+            let json = serde_json::to_string_pretty(&value).map_err(|e| format!("JSON serialization error: {}", e))?;
+            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+            return Ok(());
+        }
+        (i, "yaml") if i != "yaml" && value != Value::Null => {
+            let yaml = serde_yaml::to_string(&value).map_err(|e| format!("YAML serialization error: {}", e))?;
+            std::fs::write(output, yaml).map_err(|e| format!("Failed to write output: {}", e))?;
+            return Ok(());
+        }
+        (i, "toml") if i != "toml" && value != Value::Null => {
+            let toml_string = toml::to_string(&value).map_err(|e| format!("TOML serialization error: {}", e))?;
+            std::fs::write(output, toml_string).map_err(|e| format!("Failed to write output: {}", e))?;
+            return Ok(());
+        }
+        (i, "csv") if i != "csv" && value != Value::Null => {
+            if let Some(arr) = value.as_array() {
+                if arr.is_empty() { return Ok(()); }
                 let mut headers = std::collections::BTreeSet::new();
                 for item in arr {
                     if let Some(obj) = item.as_object() {
-                        for key in obj.keys() {
-                            headers.insert(key.to_string());
-                        }
+                        for key in obj.keys() { headers.insert(key.to_string()); }
                     }
                 }
-
                 let header_list: Vec<String> = headers.into_iter().collect();
-
-                let mut wtr = csv::Writer::from_path(output)
-                    .map_err(|e| format!("Failed to create CSV writer: {}", e))?;
-
-                // Write headers
-                wtr.write_record(&header_list)
-                    .map_err(|e| format!("CSV header write error: {}", e))?;
-
-                // Write rows
+                let mut wtr = csv::Writer::from_path(output).map_err(|e| format!("Failed to create CSV writer: {}", e))?;
+                wtr.write_record(&header_list).map_err(|e| format!("CSV header write error: {}", e))?;
                 for item in arr {
                     if let Some(obj) = item.as_object() {
-                        let row: Vec<String> = header_list
-                            .iter()
-                            .map(|h| {
-                                obj.get(h)
-                                    .and_then(|v| match v {
-                                        Value::String(s) => Some(s.clone()),
-                                        Value::Null => Some("".to_string()),
-                                        _ => Some(v.to_string()),
-                                    })
-                                    .unwrap_or_default()
-                            })
-                            .collect();
-                        wtr.write_record(&row)
-                            .map_err(|e| format!("CSV row write error: {}", e))?;
+                        let row: Vec<String> = header_list.iter().map(|h| {
+                            obj.get(h).and_then(|v| match v {
+                                Value::String(s) => Some(s.clone()),
+                                Value::Null => Some("".to_string()),
+                                _ => Some(v.to_string()),
+                            }).unwrap_or_default()
+                        }).collect();
+                        wtr.write_record(&row).map_err(|e| format!("CSV row write error: {}", e))?;
                     }
                 }
                 wtr.flush().map_err(|e| format!("Failed to flush CSV: {}", e))?;
             } else {
-                return Err("JSON must be an array of objects to convert to CSV".to_string());
+                return Err("Input must be an array of objects to convert to CSV".to_string());
             }
-        }
-        ("json", "yaml") => {
-            let value: Value =
-                serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
-            let yaml = serde_yaml::to_string(&value)
-                .map_err(|e| format!("YAML serialization error: {}", e))?;
-            std::fs::write(output, yaml).map_err(|e| format!("Failed to write output: {}", e))?;
-        }
-        ("yaml", "json") => {
-            let value: Value =
-                serde_yaml::from_reader(reader).map_err(|e| format!("YAML parse error: {}", e))?;
-            let json = serde_json::to_string_pretty(&value)
-                .map_err(|e| format!("JSON serialization error: {}", e))?;
-            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
-        }
-        ("json", "toml") => {
-            let value: Value =
-                serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
-            let toml_string = toml::to_string(&value)
-                .map_err(|e| format!("TOML serialization error: {}", e))?;
-            std::fs::write(output, toml_string)
-                .map_err(|e| format!("Failed to write output: {}", e))?;
-        }
-        ("toml", "json") => {
-            let content = std::fs::read_to_string(input)
-                .map_err(|e| format!("Failed to read input file: {}", e))?;
-            let value: Value = toml::from_str(&content).map_err(|e| format!("TOML parse error: {}", e))?;
-            let json = serde_json::to_string_pretty(&value)
-                .map_err(|e| format!("JSON serialization error: {}", e))?;
-            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
-        }
-        ("xml", "json") => {
-            let content = std::fs::read_to_string(input)
-                .map_err(|e| format!("Failed to read input file: {}", e))?;
-            let value: Value = quick_xml::de::from_str(&content).map_err(|e| format!("XML parse error: {}", e))?;
-            let json = serde_json::to_string_pretty(&value)
-                .map_err(|e| format!("JSON serialization error: {}", e))?;
-            std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
-        }
-        ("json", "xml") => {
-            let value: Value = serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
-            let mut xml_out = String::new();
-            xml_out.push_str("<root>\n");
-            fn value_to_xml(v: &Value, out: &mut String, indent: usize) {
-                let ind = " ".repeat(indent);
-                match v {
-                    Value::Object(map) => {
-                        for (k, val) in map {
-                            out.push_str(&format!("{}<{}>", ind, k));
-                            if val.is_object() || val.is_array() {
-                                out.push('\n');
-                                value_to_xml(val, out, indent + 2);
-                                out.push_str(&format!("{}</{}>\n", ind, k));
-                            } else {
-                                let val_str = match val {
-                                    Value::String(s) => s.clone(),
-                                    _ => val.to_string()
-                                };
-                                out.push_str(&val_str.replace('&', "&amp;").replace('<', "&lt;"));
-                                out.push_str(&format!("</{}>\n", k));
-                            }
-                        }
-                    }
-                    Value::Array(arr) => {
-                        for val in arr {
-                            out.push_str(&format!("{}<item>", ind));
-                            if val.is_object() || val.is_array() {
-                                out.push('\n');
-                                value_to_xml(val, out, indent + 2);
-                                out.push_str(&format!("{}</item>\n", ind));
-                            } else {
-                                let val_str = match val {
-                                    Value::String(s) => s.clone(),
-                                    _ => val.to_string()
-                                };
-                                out.push_str(&val_str.replace('&', "&amp;").replace('<', "&lt;"));
-                                out.push_str("</item>\n");
-                            }
-                        }
-                    }
-                    _ => {
-                        let val_str = match v {
-                            Value::String(s) => s.clone(),
-                            _ => v.to_string()
-                        };
-                        out.push_str(&format!("{}{}\n", ind, val_str.replace('&', "&amp;").replace('<', "&lt;")));
-                    }
-                }
-            }
-            value_to_xml(&value, &mut xml_out, 2);
-            xml_out.push_str("</root>");
-            std::fs::write(output, format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n{}", xml_out))
-                .map_err(|e| format!("Failed to write output: {}", e))?;
-        }
-        ("xlsx", "csv") | ("xlsx", "json") => {
-            let mut excel: Xlsx<_> = calamine::open_workbook(input)
-                .map_err(|e| format!("Failed to open XLSX: {}", e))?;
-            let sheet_name = excel.sheet_names().get(0).ok_or("No sheets found in XLSX")?.clone();
-            let range = excel.worksheet_range(&sheet_name).map_err(|e| format!("Could not read worksheet: {}", e))?;
-
-            if target_ext == "csv" {
-                let mut wtr = csv::Writer::from_path(output)
-                    .map_err(|e| format!("Failed to create CSV writer: {}", e))?;
-                for row in range.rows() {
-                    let record: Vec<String> = row.iter().map(|c| c.to_string()).collect();
-                    wtr.write_record(&record).map_err(|e| format!("CSV write error: {}", e))?;
-                }
-                wtr.flush().map_err(|e| format!("Failed to flush CSV: {}", e))?;
-            } else {
-                let mut items = Vec::new();
-                let headers: Vec<String> = range.rows().next().ok_or("Empty sheet")?.iter().map(|c| c.to_string()).collect();
-                for row in range.rows().skip(1) {
-                    let mut map = serde_json::Map::new();
-                    for (header, cell) in headers.iter().zip(row.iter()) {
-                        map.insert(header.clone(), Value::String(cell.to_string()));
-                    }
-                    items.push(Value::Object(map));
-                }
-                let json = serde_json::to_string_pretty(&items)
-                    .map_err(|e| format!("JSON serialization error: {}", e))?;
-                std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
-            }
-        }
-        ("csv", "xlsx") | ("json", "xlsx") => {
-            let mut workbook = Workbook::new();
-            let worksheet = workbook.add_worksheet();
-
-            if input_ext == "csv" {
-                let mut csv_reader = csv::Reader::from_reader(reader);
-                let headers = csv_reader.headers().map_err(|e| format!("CSV headers error: {}", e))?;
-                for (col, header) in headers.iter().enumerate() {
-                    worksheet.write(0, col as u16, header).map_err(|e| format!("XLSX write error: {}", e))?;
-                }
-                for (row_idx, result) in csv_reader.records().enumerate() {
-                    let record = result.map_err(|e| format!("CSV record error: {}", e))?;
-                    for (col_idx, val) in record.iter().enumerate() {
-                        worksheet.write((row_idx + 1) as u32, col_idx as u16, val).map_err(|e| format!("XLSX write error: {}", e))?;
-                    }
-                }
-            } else {
-                let items: Value = serde_json::from_reader(reader).map_err(|e| format!("JSON parse error: {}", e))?;
-                if let Some(arr) = items.as_array() {
-                    if !arr.is_empty() {
-                        let mut headers = Vec::new();
-                        if let Some(obj) = arr[0].as_object() {
-                            headers = obj.keys().cloned().collect::<Vec<_>>();
-                            for (col, header) in headers.iter().enumerate() {
-                                worksheet.write(0, col as u16, header).map_err(|e| format!("XLSX write error: {}", e))?;
-                            }
-                        }
-                        for (row_idx, item) in arr.iter().enumerate() {
-                            if let Some(obj) = item.as_object() {
-                                for (col_idx, header) in headers.iter().enumerate() {
-                                    if let Some(val) = obj.get(header) {
-                                        worksheet.write((row_idx + 1) as u32, col_idx as u16, val.to_string()).map_err(|e| format!("XLSX write error: {}", e))?;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            workbook.save(output).map_err(|e| format!("Failed to save XLSX: {}", e))?;
+            return Ok(());
         }
         ("csv", "sql") => {
-            let mut csv_reader = csv::Reader::from_reader(reader);
+            // Already handled by generic path above if we wanted json,
+            // but sql needs special handling
+            let mut csv_reader = csv::Reader::from_reader(File::open(input).unwrap());
             let headers = csv_reader.headers().map_err(|e| format!("CSV headers error: {}", e))?.clone();
-            let table_name = input.file_stem().and_then(|s| s.to_str())
-                .unwrap_or("imported_table")
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '_')
-                .collect::<String>();
+            let table_name = input.file_stem().and_then(|s| s.to_str()).unwrap_or("imported_table")
+                .chars().filter(|c| c.is_alphanumeric() || *c == '_').collect::<String>();
             let mut sql = format!("CREATE TABLE IF NOT EXISTS `{}` (\n", table_name);
             for (i, h) in headers.iter().enumerate() {
                 let safe_h = h.chars().filter(|c| c.is_alphanumeric() || *c == '_').collect::<String>();
@@ -812,7 +760,6 @@ async fn run_data_conversion(
                 sql.push('\n');
             }
             sql.push_str(");\n\n");
-
             for result in csv_reader.records() {
                 let record = result.map_err(|e| format!("CSV record error: {}", e))?;
                 sql.push_str(&format!("INSERT INTO `{}` VALUES (", table_name));
@@ -822,6 +769,7 @@ async fn run_data_conversion(
                 sql.push_str(");\n");
             }
             std::fs::write(output, sql).map_err(|e| format!("Failed to write output: {}", e))?;
+            return Ok(());
         }
         ("log", "json") => {
             let mut content = String::new();

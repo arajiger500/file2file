@@ -2,84 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #09090b;
-  --surface: #131316;
-  --surface-raised: #1c1c21;
-  --brand: #3b82f6;
-  --border: #27272a;
+body {
+  @apply bg-background text-text-primary antialiased select-none;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-body {
-  background-color: var(--background);
-  color: #f4f4f5;
-  font-family: 'Inter', -apple-system, system-ui, sans-serif;
-  letter-spacing: -0.01em;
+code, pre, .mono {
+  @apply font-mono;
 }
 
 @layer components {
-  .glass-card {
-    @apply bg-surface/40 backdrop-blur-xl border border-border rounded-3xl transition-all duration-300;
+  .btn {
+    @apply px-4 py-2 text-[13px] font-medium transition-colors active:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-DEFAULT;
   }
 
-  .pro-button {
-    @apply px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 active:scale-95;
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent/90;
   }
 
-  .pro-button-primary {
-    @apply pro-button bg-brand text-white shadow-lg shadow-brand/20 hover:bg-blue-500 hover:shadow-brand/40;
+  .btn-secondary {
+    @apply btn bg-surface-raised text-text-primary border border-border hover:bg-surface-elevated;
   }
 
-  .pro-button-secondary {
-    @apply pro-button bg-surface-raised border border-border text-zinc-300 hover:text-white hover:border-zinc-500;
+  .btn-ghost {
+    @apply btn bg-transparent text-text-secondary hover:text-text-primary hover:bg-surface-raised;
+  }
+
+  .input-field {
+    @apply bg-surface border border-border px-3 py-2 text-[13px] text-text-primary focus:border-accent outline-none transition-colors rounded-DEFAULT;
+  }
+
+  .card {
+    @apply bg-surface border border-border rounded-lg;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-border-strong;
   }
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #27272a;
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
-}
-
-/* Custom Pro Animations */
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-.animate-spin-slow {
-  animation: spin-slow 8s linear infinite;
-}
-
-@keyframes progress-indefinite {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
-.animate-progress-indefinite {
-  animation: progress-indefinite 2s infinite linear;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 10px;
-}
+/* Typography Overrides */
+h1 { @apply text-[24px] font-semibold tracking-tight; }
+h2 { @apply text-[18px] font-semibold tracking-tight; }
+h3 { @apply text-[15px] font-medium; }
+.text-small { @apply text-[12px]; }
+.text-tiny { @apply text-[11px]; }

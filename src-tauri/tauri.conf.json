@@ -46,7 +46,8 @@
             "binaries/ffprobe",
             "binaries/pandoc",
             "binaries/magick",
-            "binaries/pdftotext"
+            "binaries/pdftotext",
+            "binaries/pdftohtml"
         ],
         "windows": {
             "nsis": {

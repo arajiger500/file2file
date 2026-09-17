@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Upload, Folder, File as FileIcon, X, Sparkles, ArrowRight } from "lucide-react";
+import { Upload, File as FileIcon, X, Plus, Trash2 } from "lucide-react";
 import { FileItem, FileCategory, FormatOption } from "../types";
 import { api, isTauri } from "../services/api";
 
@@ -13,6 +13,7 @@ interface DropZoneProps {
 
 const detectCategory = (ext: string): FileCategory => {
     const e = ext.toLowerCase();
+
     if (["mp4", "mkv", "mov", "avi", "webm", "flv", "wmv", "m4v", "ts", "3gp", "ogv", "vob", "gif"].includes(e)) return "video";
     if (["mp3", "wav", "flac", "aac", "ogg", "m4a", "opus", "wma", "aiff"].includes(e)) return "audio";
     if (["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "tiff", "ico", "heic", "tga", "psd"].includes(e)) return "image";
@@ -105,20 +106,20 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
         return () => unlisten?.();
     }, []);
 
-    const handleSelectFiles = async () => {
+    const handleSelectFiles = async (type: "files" | "folder") => {
         if (!isTauri()) {
             fileRef.current?.click();
             return;
         }
 
         const { open } = await import("@tauri-apps/plugin-dialog");
-        const selected = await open({ multiple: true, directory: false });
+        const selected = await open({ multiple: true, directory: type === "folder" });
         if (!selected) return;
         await processPaths(Array.isArray(selected) ? selected : [selected]);
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             <div
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
@@ -127,79 +128,102 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
                     setIsDragging(false);
                     if (!isTauri()) processFiles(e.dataTransfer.files);
                 }}
-                onClick={() => { void handleSelectFiles(); }}
-                className={`group relative overflow-hidden h-72 border-2 border-dashed rounded-[2rem] flex flex-col items-center justify-center transition-all duration-500 cursor-pointer ${
-                    isDragging ? "border-blue-500 bg-blue-500/5 scale-[0.98]" : "border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/50 hover:border-zinc-700"
+                className={`relative h-[240px] border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all ${
+                    isDragging
+                    ? "border-accent bg-accent/5"
+                    : "border-border bg-surface hover:border-border-strong hover:bg-surface-raised"
                 }`}
             >
-                <div className="absolute inset-0 bg-gradient-to-t from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-
                 <input type="file" ref={fileRef} multiple className="hidden" onChange={(e) => processFiles(e.target.files)} />
 
-                <div className="relative z-10 space-y-4 text-center">
-                    <div className="w-20 h-20 mx-auto rounded-3xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-2xl group-hover:scale-110 group-hover:rotate-3 transition-transform duration-500">
-                        <Upload className="w-8 h-8 text-blue-400" />
+                <div className="flex flex-col items-center gap-4">
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center bg-surface-raised border border-border ${isDragging ? "text-accent" : "text-text-muted"}`}>
+                        <Upload className="w-5 h-5" />
                     </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-white">Import Media</h3>
-                        <p className="text-zinc-500 text-sm mt-1">Drag files or folder to begin processing</p>
+                    <div className="text-center space-y-1">
+                        <h3 className="text-[16px] font-semibold text-text-primary">Drop files here</h3>
+                        <p className="text-[13px] text-text-muted">or choose files / folders</p>
+                    </div>
+                    <div className="flex gap-2 mt-2">
+                        <button
+                            onClick={() => void handleSelectFiles("files")}
+                            className="btn-secondary h-[36px]"
+                        >
+                            Choose Files
+                        </button>
+                        <button
+                            onClick={() => void handleSelectFiles("folder")}
+                            className="btn-secondary h-[36px]"
+                        >
+                            Choose Folder
+                        </button>
                     </div>
                 </div>
             </div>
 
             {files.length > 0 && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                    {suggestions.length > 0 && (
-                        <div className="glass-card p-6 border-blue-500/20 bg-blue-500/5">
-                            <div className="flex items-center gap-2 text-blue-400 mb-4">
-                                <Sparkles className="w-4 h-4" />
-                                <span className="text-xs font-bold uppercase tracking-[0.2em]">Smart Suggestions</span>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {suggestions.map(s => (
-                                    <button
-                                        key={s.extension}
-                                        onClick={() => onDirectConvert?.(s)}
-                                        className="group p-3 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-blue-500/50 hover:bg-zinc-800 transition-all text-left"
-                                    >
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="font-mono text-sm font-black text-white group-hover:text-blue-400">.{s.extension}</span>
-                                            <ArrowRight className="w-3 h-3 text-zinc-600 group-hover:text-blue-400 transition-transform group-hover:translate-x-0.5" />
-                                        </div>
-                                        <div className="text-[10px] text-zinc-500 truncate font-bold uppercase tracking-tighter">{s.name}</div>
-                                    </button>
-                                ))}
-                            </div>
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-[14px] font-semibold text-text-primary">Queue · {files.length} files</h3>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => void handleSelectFiles("files")}
+                                className="btn-ghost h-[32px] px-2 text-[12px] flex items-center gap-1.5"
+                            >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Add files</span>
+                            </button>
+                            <button
+                                onClick={onClearFiles}
+                                className="btn-ghost h-[32px] px-2 text-[12px] text-error hover:text-error flex items-center gap-1.5"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Clear</span>
+                            </button>
                         </div>
-                    )}
+                    </div>
 
-                    <div className="glass-card p-6 border-zinc-800/50">
-                        <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-                                <Folder className="w-3.5 h-3.5" />
-                                Batch Queue ({files.length})
-                            </h4>
-                            <button onClick={onClearFiles} className="text-[10px] font-bold text-zinc-600 hover:text-red-400 transition-colors uppercase">Clear All</button>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto pr-2">
+                    <div className="border border-border rounded-lg overflow-hidden divide-y divide-border">
+                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                             {files.map(f => (
-                                <div key={f.id} className="group/item flex items-center justify-between p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-zinc-600 transition-all">
-                                    <div className="flex items-center gap-4 truncate">
-                                        <div className="p-2.5 rounded-xl bg-zinc-800 group-hover/item:bg-blue-500/10 transition-colors">
-                                            <FileIcon className="w-4 h-4 text-zinc-400 group-hover/item:text-blue-400" />
-                                        </div>
-                                        <div className="truncate">
-                                            <div className="text-sm font-semibold text-zinc-200 truncate">{f.name}</div>
-                                            <div className="text-[10px] text-zinc-500 uppercase font-mono mt-0.5">{(f.size / (1024*1024)).toFixed(2)} MB • {f.extension}</div>
+                                <div key={f.id} className="h-[60px] flex items-center justify-between px-4 bg-surface hover:bg-surface-raised transition-colors group">
+                                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                                        <FileIcon className="w-5 h-5 text-text-muted shrink-0" />
+                                        <div className="truncate flex-1">
+                                            <div className="text-[13px] font-medium text-text-primary truncate">{f.name}</div>
+                                            <div className="text-[11px] text-text-muted font-mono uppercase">
+                                                {(f.size / (1024*1024)).toFixed(2)} MB · {f.extension}
+                                            </div>
                                         </div>
                                     </div>
-                                    <button onClick={(e) => { e.stopPropagation(); onRemoveFile(f.id); }} className="opacity-0 group-hover/item:opacity-100 p-2 hover:bg-red-500/10 rounded-lg text-zinc-600 hover:text-red-400 transition-all">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onRemoveFile(f.id); }}
+                                        className="p-2 text-text-muted hover:text-error transition-colors"
+                                    >
                                         <X className="w-4 h-4" />
                                     </button>
                                 </div>
                             ))}
                         </div>
                     </div>
+
+                    {suggestions.length > 0 && (
+                        <div className="space-y-3">
+                            <h3 className="text-[14px] font-semibold text-text-primary">Recommended formats</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {suggestions.map(s => (
+                                    <button
+                                        key={s.extension}
+                                        onClick={() => onDirectConvert?.(s)}
+                                        className="btn-secondary h-auto py-2.5 px-4 text-left flex flex-col gap-0.5 border-border hover:border-accent group"
+                                    >
+                                        <span className="text-[13px] font-semibold text-text-primary group-hover:text-accent">{s.extension.toUpperCase()}</span>
+                                        <span className="text-[11px] text-text-muted leading-tight">{s.description || "Compatible format"}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

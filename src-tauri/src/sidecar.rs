@@ -18,12 +18,13 @@ pub struct SidecarHealthReport {
     pub pandoc: BinaryStatus,
     pub imagemagick: BinaryStatus,
     pub pdftotext: BinaryStatus,
+    pub pdftohtml: BinaryStatus,
     pub all_ready: bool,
 }
 
 fn parse_version(output: &str, cmd: &str) -> String {
     let first_line = output.lines().next().unwrap_or("Available");
-    match cmd {
+    let version = match cmd {
         "ffmpeg" | "ffprobe" => {
             first_line
                 .split("version ")
@@ -47,7 +48,7 @@ fn parse_version(output: &str, cmd: &str) -> String {
                 .unwrap_or(first_line)
                 .to_string()
         }
-        "pdftotext" => {
+        "pdftotext" | "pdftohtml" => {
             first_line
                 .split("version ")
                 .nth(1)
@@ -56,7 +57,8 @@ fn parse_version(output: &str, cmd: &str) -> String {
                 .to_string()
         }
         _ => first_line.to_string(),
-    }
+    };
+    version.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != '-').to_string()
 }
 
 pub async fn probe_sidecar<R: tauri::Runtime>(
@@ -64,8 +66,11 @@ pub async fn probe_sidecar<R: tauri::Runtime>(
     cmd_name: &str,
     version_arg: &str,
 ) -> BinaryStatus {
+    println!("Probing binary: {}", cmd_name);
+
     // 1. Try bundled sidecar
     if let Ok(sidecar) = app.shell().sidecar(cmd_name) {
+        println!("Checking bundled sidecar for {}", cmd_name);
         let output = sidecar.arg(version_arg).output().await;
         match output {
             Ok(out) if out.status.success() || !out.stderr.is_empty() => {
@@ -84,7 +89,9 @@ pub async fn probe_sidecar<R: tauri::Runtime>(
                     };
                 }
             }
-            _ => {}
+            _ => {
+                println!("Bundled sidecar check failed for {}", cmd_name);
+            }
         }
     }
 
@@ -97,6 +104,7 @@ pub async fn probe_sidecar<R: tauri::Runtime>(
         });
 
         if bin_path.exists() {
+            println!("Checking app_data binary at: {:?}", bin_path);
             let output = std::process::Command::new(&bin_path).arg(version_arg).output();
             match output {
                 Ok(out) if out.status.success() || !out.stderr.is_empty() => {
@@ -113,13 +121,22 @@ pub async fn probe_sidecar<R: tauri::Runtime>(
                         absolute_path: Some(bin_path.to_string_lossy().to_string()),
                     };
                 }
-                _ => {}
+                _ => {
+                    println!("App_data binary execution failed for {}", cmd_name);
+                }
             }
         }
     }
 
     // 3. Fallback to system PATH
-    let output = std::process::Command::new(cmd_name).arg(version_arg).output();
+    let actual_cmd = if cfg!(windows) {
+        format!("{}.exe", cmd_name)
+    } else {
+        cmd_name.to_string()
+    };
+
+    println!("Checking system PATH for {}", actual_cmd);
+    let output = std::process::Command::new(&actual_cmd).arg(version_arg).output();
     match output {
         Ok(out) if out.status.success() || !out.stderr.is_empty() => {
             let stdout = String::from_utf8_lossy(&out.stdout).to_string();
@@ -133,7 +150,7 @@ pub async fn probe_sidecar<R: tauri::Runtime>(
                     available: true,
                     version: Some(version),
                     path_or_sidecar: "system_path".to_string(),
-                    absolute_path: Some(cmd_name.to_string()),
+                    absolute_path: Some(actual_cmd),
                 }
             } else {
                 BinaryStatus {
@@ -145,12 +162,32 @@ pub async fn probe_sidecar<R: tauri::Runtime>(
                 }
             }
         }
-        _ => BinaryStatus {
-            name: cmd_name.to_string(),
-            available: false,
-            version: None,
-            path_or_sidecar: "not_found".to_string(),
-            absolute_path: None,
+        _ => {
+            // Last ditch effort for Windows without extension
+            if cfg!(windows) {
+                println!("Final fallback check for Windows without .exe: {}", cmd_name);
+                let output = std::process::Command::new(cmd_name).arg(version_arg).output();
+                if let Ok(out) = output {
+                    if out.status.success() || !out.stderr.is_empty() {
+                        let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+                        return BinaryStatus {
+                            name: cmd_name.to_string(),
+                            available: true,
+                            version: Some(parse_version(&combined, cmd_name)),
+                            path_or_sidecar: "system_path".to_string(),
+                            absolute_path: Some(cmd_name.to_string()),
+                        };
+                    }
+                }
+            }
+
+            BinaryStatus {
+                name: cmd_name.to_string(),
+                available: false,
+                version: None,
+                path_or_sidecar: "not_found".to_string(),
+                absolute_path: None,
+            }
         },
     }
 }
@@ -159,15 +196,16 @@ pub async fn get_binary_command<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     cmd_name: &str,
 ) -> Result<tauri_plugin_shell::process::Command, String> {
-    // We use a simplified version of probe_sidecar logic without the version check
-    // because we assume health check was already done or we just want to try running it.
-
     // 1. Try bundled sidecar
     if let Ok(sidecar) = app.shell().sidecar(cmd_name) {
-        // We can't easily check if sidecar "exists" without running it in Tauri v2 shell plugin
-        // but we can try to get its version as a quick check.
-        // For performance, we could cache this, but for now let's just try to return it.
-        return Ok(sidecar);
+        // Quick check if it actually runs
+        let output = sidecar.arg("-version").output().await;
+        if let Ok(out) = output {
+             if out.status.success() || !out.stderr.is_empty() {
+                // Re-create the sidecar command because we consumed it in .output()
+                return Ok(app.shell().sidecar(cmd_name).map_err(|e| e.to_string())?);
+             }
+        }
     }
 
     // 2. Try App Data Directory fallback
@@ -184,6 +222,20 @@ pub async fn get_binary_command<R: tauri::Runtime>(
     }
 
     // 3. Fallback to system PATH
+    let actual_cmd = if cfg!(windows) {
+        format!("{}.exe", cmd_name)
+    } else {
+        cmd_name.to_string()
+    };
+
+    // Check if actual_cmd exists in path
+    if let Ok(out) = std::process::Command::new(&actual_cmd).arg("-version").output() {
+        if out.status.success() || !out.stderr.is_empty() {
+             return Ok(app.shell().command(actual_cmd));
+        }
+    }
+
+    // Final fallback
     Ok(app.shell().command(cmd_name))
 }
 
@@ -193,9 +245,10 @@ pub async fn check_sidecar_health<R: tauri::Runtime>(app: &tauri::AppHandle<R>) 
     let pandoc = probe_sidecar(app, "pandoc", "--version").await;
     let imagemagick = probe_sidecar(app, "magick", "--version").await;
     let pdftotext = probe_sidecar(app, "pdftotext", "-v").await;
+    let pdftohtml = probe_sidecar(app, "pdftohtml", "-v").await;
 
     let all_ready =
-        ffmpeg.available && ffprobe.available && pandoc.available && imagemagick.available && pdftotext.available;
+        ffmpeg.available && ffprobe.available && pandoc.available && imagemagick.available && pdftotext.available && pdftohtml.available;
 
     SidecarHealthReport {
         ffmpeg,
@@ -203,6 +256,7 @@ pub async fn check_sidecar_health<R: tauri::Runtime>(app: &tauri::AppHandle<R>) 
         pandoc,
         imagemagick,
         pdftotext,
+        pdftohtml,
         all_ready,
     }
 }

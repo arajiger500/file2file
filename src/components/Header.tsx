@@ -1,5 +1,5 @@
 import React from "react";
-import { Cpu, Zap, Sliders, ShieldCheck, RefreshCw } from "lucide-react";
+import { Cpu, Zap, Settings, Activity } from "lucide-react";
 import appPackage from "../../package.json";
 import { HardwareInfo, SidecarHealthReport } from "../types";
 
@@ -23,68 +23,60 @@ export const Header: React.FC<HeaderProps> = ({
     const appVersion = appPackage.version || "0.1.0";
 
     return (
-        <header className="border-b border-border bg-surface/80 backdrop-blur px-6 py-3.5 flex items-center justify-between sticky top-0 z-30">
-            {/* Brand logo & tagline */}
+        <header className="h-[56px] border-b border-border bg-background px-4 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-blue-700 flex items-center justify-center shadow-lg shadow-brand-500/20">
-                    <RefreshCw className="w-5 h-5 text-white animate-spin-slow" />
-                </div>
-                <div>
-                    <div className="flex items-center gap-2">
-                        <h1 className="font-bold text-lg text-slate-100 tracking-tight">File2File</h1>
-                        <span className="text-[10px] uppercase font-semibold tracking-wider bg-brand-500/20 text-brand-400 border border-brand-500/30 px-1.5 py-0.5 rounded">
-                            v{appVersion}
-                        </span>
-                    </div>
-                    <p className="text-xs text-slate-400">100% Offline & Private File Converter</p>
-                </div>
+                <span className="text-[18px] font-semibold text-text-primary tracking-tight">File2File</span>
+                <span className="text-[12px] text-text-muted font-mono pt-0.5">v{appVersion}</span>
+                <div className="h-4 w-[1px] bg-border mx-1" />
+                <span className="text-[11px] text-text-muted uppercase tracking-wider font-medium pt-0.5">Local file conversion</span>
             </div>
 
-            {/* Hardware status indicators & controls */}
-            <div className="flex items-center gap-3">
-                {/* Sidecar status pill */}
-                <div
+            <div className="flex items-center gap-4">
+                <button
                     onClick={onOpenDiagnostics}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-surface-raised border border-border text-slate-300 cursor-pointer hover:border-zinc-600 transition-colors"
-                    title={sidecars?.all_ready ? "All conversion engines are ready for high-performance processing." : "Some engines are missing. Click for diagnostics."}
+                    className="flex items-center gap-2 text-[12px] text-text-secondary hover:text-text-primary transition-colors"
                 >
-                    <ShieldCheck className={`w-3.5 h-3.5 ${sidecars?.all_ready ? "text-emerald-400" : "text-amber-400"}`} />
-                    <span className="font-medium">{sidecars?.all_ready ? "Engines Ready" : "Limited Engine Mode"}</span>
-                </div>
+                    <div className={`w-2 h-2 rounded-full ${sidecars?.all_ready ? "bg-success" : "bg-warning"}`} />
+                    <span>Engines: {sidecars?.all_ready ? "Ready" : "Warning"}</span>
+                </button>
 
-                {/* Hardware acceleration badge */}
                 <button
                     onClick={onRefreshHardware}
-                    className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${hardware?.hardware_acceleration_supported
-                        ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-300 hover:bg-emerald-950/60"
-                        : "bg-surface-raised border-border text-slate-300 hover:bg-surface"
-                        }`}
-                    title={`GPU: ${hardware?.gpu_vendor || "None"} | CPU Cores: ${hardware?.cpu_cores || 0}`}
+                    className="flex items-center gap-2 text-[12px] text-text-secondary hover:text-text-primary transition-colors"
                 >
                     {hardware?.hardware_acceleration_supported ? (
                         <>
-                            <Zap className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/30" />
-                            <span>GPU: {hardware.gpu_vendor || "Hardware"} Accel</span>
+                            <Zap className="w-3.5 h-3.5 text-accent" />
+                            <span>GPU: {hardware.gpu_vendor || "Accelerated"}</span>
                         </>
                     ) : (
                         <>
-                            <Cpu className="w-3.5 h-3.5 text-slate-400" />
-                            <span>CPU ({hardware?.cpu_cores || 4} Threads)</span>
+                            <Cpu className="w-3.5 h-3.5" />
+                            <span>CPU: {hardware?.cpu_cores || 0} Cores</span>
                         </>
                     )}
                 </button>
 
-                {/* Settings toggle button */}
-                <button
-                    onClick={onToggleSettings}
-                    className={`p-2 rounded-lg border transition-all ${isSettingsOpen
-                        ? "bg-brand-500/20 border-brand-500 text-brand-400 shadow-sm"
-                        : "bg-surface-raised border-border text-slate-300 hover:text-white hover:border-slate-600"
+                <div className="flex items-center gap-1 ml-2">
+                    <button
+                        onClick={onOpenDiagnostics}
+                        className="p-2 text-text-muted hover:text-text-primary hover:bg-surface-raised rounded-DEFAULT transition-all"
+                        title="Diagnostics"
+                    >
+                        <Activity className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={onToggleSettings}
+                        className={`p-2 rounded-DEFAULT transition-all ${
+                            isSettingsOpen
+                            ? "bg-accent/10 text-accent"
+                            : "text-text-muted hover:text-text-primary hover:bg-surface-raised"
                         }`}
-                    title="Advanced Conversion Settings"
-                >
-                    <Sliders className="w-4 h-4" />
-                </button>
+                        title="Settings"
+                    >
+                        <Settings className="w-4 h-4" />
+                    </button>
+                </div>
             </div>
         </header>
     );

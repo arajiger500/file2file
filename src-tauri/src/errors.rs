@@ -39,7 +39,7 @@ pub fn map_technical_error(error: &str, _input_path: &str, target_format: &str) 
         let utility = if err_lower.contains("ffmpeg") { "FFmpeg" }
                      else if err_lower.contains("magick") { "ImageMagick" }
                      else if err_lower.contains("pandoc") { "Pandoc" }
-                     else if err_lower.contains("pdftotext") { "Poppler" }
+                     else if err_lower.contains("pdftotext") || err_lower.contains("pdftohtml") { "Poppler" }
                      else { "a required utility" };
         return format!("{} is missing or could not be started. Please ensure it is correctly bundled or installed.", utility);
     }

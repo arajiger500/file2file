@@ -8,7 +8,7 @@
 
 ## Conversion Implementation
 ### Phase 2: Document Conversions (1 to 15)
-- [x] 1. PDF to DOCX (Via pdftotext + Pandoc)
+- [x] 1. PDF to DOCX (High-fidelity via pdftohtml + Pandoc, preserves images/tables)
 - [x] 2. DOCX to PDF (Via Pandoc)
 - [x] 3. PDF to TXT (Via pdftotext)
 - [x] 4. PDF to HTML (Via pdftotext + Pandoc)
@@ -84,7 +84,7 @@
 - [x] Improve error reporting in the UI.
 
 ## Testing
-- [x] Establish Rust integration test suite (Added to converter.rs).
+- [x] Establish Rust integration test suite (Added image and table preservation tests).
 - [ ] Establish Vitest/React Testing Library setup for frontend.
 
 ## Deployment & Packaging

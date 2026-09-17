@@ -17,7 +17,7 @@ import {
     AdvancedSettings,
     ConversionResult,
 } from "./types";
-import { Shield, Zap, Globe, ArrowRight } from "lucide-react";
+import { Shield, Database, ArrowRight } from "lucide-react";
 
 type AppStep = "upload" | "select-format" | "convert-box";
 
@@ -67,7 +67,6 @@ export function App() {
         try {
             const formats = await api.getCompatibleTargets(newFiles[0].extension);
             setAvailableFormats(formats);
-            // We no longer auto-navigate to allow smart suggestions on the same page
         } catch (err) {
             console.error("Format fetch error:", err);
         }
@@ -84,7 +83,7 @@ export function App() {
     };
 
     return (
-        <div className="min-h-screen flex flex-col bg-zinc-950 selection:bg-blue-500/30">
+        <div className="h-screen flex flex-col bg-background text-text-primary overflow-hidden">
             <Header
                 hardware={hardware}
                 sidecars={sidecars}
@@ -94,13 +93,14 @@ export function App() {
                 onOpenDiagnostics={() => setIsDiagnosticOpen(true)}
             />
 
-            <main className="flex-1 w-full max-w-[1400px] mx-auto px-6 py-8">
-                {currentStep === "upload" && (
-                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-                        <div className="xl:col-span-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                            <div className="space-y-2">
-                                <h2 className="text-4xl font-bold tracking-tight text-white uppercase tracking-tighter">Universal Engine</h2>
-                                <p className="text-zinc-400 text-lg">High-fidelity conversions. No data leaves your machine.</p>
+            <main className="flex-1 flex overflow-hidden border-t border-border">
+                {/* Main Workspace (Left) */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-10 border-r border-border bg-background">
+                    {currentStep === "upload" && (
+                        <div className="max-w-4xl space-y-10">
+                            <div className="space-y-1.5">
+                                <h1 className="text-[28px] font-semibold text-text-primary tracking-tight">Convert files</h1>
+                                <p className="text-[14px] text-text-secondary">Convert media, documents, images, data, and archives locally.</p>
                             </div>
 
                             <QuickConverters
@@ -121,73 +121,89 @@ export function App() {
                             />
 
                             {files.length > 0 && (
-                                <div className="flex justify-center animate-in fade-in zoom-in duration-500">
+                                <div className="flex justify-start">
                                     <button
                                         onClick={() => setCurrentStep("select-format")}
-                                        className="group px-8 py-4 rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-blue-500/50 text-white font-bold uppercase tracking-widest text-sm flex items-center gap-3 transition-all hover:bg-zinc-800"
+                                        className="btn-primary flex items-center gap-2 group h-[48px] px-8"
                                     >
-                                        <span>Explore All 100+ Formats</span>
-                                        <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+                                        <span>Choose output format</span>
+                                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                     </button>
                                 </div>
                             )}
                         </div>
+                    )}
 
-                        <div className="xl:col-span-4 space-y-6">
-                            <div className="glass-card p-6 space-y-5 bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 border-zinc-800">
-                                <div className="flex items-center gap-3 text-zinc-100">
-                                    <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                                        <Shield className="w-5 h-5 text-blue-400" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold">Air-Gapped Privacy</h3>
-                                        <p className="text-xs text-zinc-500">100% On-Device Processing</p>
+                    {currentStep === "select-format" && (
+                        <div className="max-w-5xl">
+                            <FormatSelectionPage
+                                files={files}
+                                availableFormats={availableFormats}
+                                onSelectFormat={handleSelectFormat}
+                                onBack={() => setCurrentStep("upload")}
+                            />
+                        </div>
+                    )}
+
+                    {currentStep === "convert-box" && selectedFormatOption && (
+                        <div className="h-full">
+                            <ConversionStudio
+                                files={files}
+                                format={selectedFormatOption}
+                                settings={settings}
+                                hardware={hardware}
+                                onBackToFormats={() => setCurrentStep("select-format")}
+                                onResetToUpload={() => { setFiles([]); setCurrentStep("upload"); }}
+                                onUpdateFileStatus={handleUpdateFileStatus}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* Sidebar (Right) */}
+                <aside className="hidden md:flex w-80 lg:w-96 flex-col shrink-0 bg-surface border-l border-border">
+                    <div className="p-6 space-y-8 flex-1 overflow-y-auto custom-scrollbar">
+                        {/* System Summary */}
+                        <div className="space-y-4">
+                            <h3 className="text-tiny uppercase tracking-widest text-text-muted font-bold">System Status</h3>
+                            <div className="space-y-3">
+                                <div className="flex items-start gap-3">
+                                    <Shield className="w-3.5 h-3.5 text-success mt-0.5" />
+                                    <div className="space-y-0.5">
+                                        <p className="text-[12px] font-medium text-text-secondary">Local Processing</p>
+                                        <p className="text-tiny text-text-muted leading-tight">All conversions are performed locally. No files leave your device.</p>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3 text-[11px]">
-                                    <div className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800 flex items-center gap-2">
-                                        <Zap className="w-4 h-4 text-amber-400" />
-                                        <span>GPU Accelerated</span>
-                                    </div>
-                                    <div className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800 flex items-center gap-2">
-                                        <Globe className="w-4 h-4 text-emerald-400" />
-                                        <span>Offline Core</span>
+                                <div className="flex items-start gap-3">
+                                    <Database className="w-3.5 h-3.5 text-accent mt-0.5" />
+                                    <div className="space-y-0.5">
+                                        <p className="text-[12px] font-medium text-text-secondary">Hardware Accelerated</p>
+                                        <p className="text-tiny text-text-muted leading-tight">Using {hardware?.recommended_encoder.toUpperCase()} for optimal performance.</p>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <HistoryPanel
-                                history={history}
-                                onClearHistory={() => setHistory([])}
-                            />
+                        <div className="h-[1px] bg-border" />
+
+                        <HistoryPanel
+                            history={history}
+                            onClearHistory={() => setHistory([])}
+                        />
+                    </div>
+
+                    {/* Compact Footer Status */}
+                    <div className="h-[40px] border-t border-border px-4 flex items-center justify-between bg-surface-raised shrink-0">
+                        <div className="flex gap-4">
+                            <span className="text-tiny font-mono text-text-muted">CPU: {hardware?.cpu_cores || 0} Cores</span>
+                            <span className="text-tiny font-mono text-text-muted">MEM: OK</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-success" />
+                            <span className="text-tiny font-medium text-text-muted uppercase tracking-tighter">Connected</span>
                         </div>
                     </div>
-                )}
-
-                {currentStep === "select-format" && (
-                    <div className="animate-in fade-in zoom-in-95 duration-500">
-                        <FormatSelectionPage
-                            files={files}
-                            availableFormats={availableFormats}
-                            onSelectFormat={handleSelectFormat}
-                            onBack={() => setCurrentStep("upload")}
-                        />
-                    </div>
-                )}
-
-                {currentStep === "convert-box" && selectedFormatOption && (
-                    <div className="animate-in fade-in slide-in-from-right-8 duration-500">
-                        <ConversionStudio
-                            files={files}
-                            format={selectedFormatOption}
-                            settings={settings}
-                            hardware={hardware}
-                            onBackToFormats={() => setCurrentStep("select-format")}
-                            onResetToUpload={() => { setFiles([]); setCurrentStep("upload"); }}
-                            onUpdateFileStatus={handleUpdateFileStatus}
-                        />
-                    </div>
-                )}
+                </aside>
             </main>
 
             <AdvancedSettingsDrawer

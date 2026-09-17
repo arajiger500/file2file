@@ -1,5 +1,5 @@
 import React from "react";
-import { History, CheckCircle2, AlertCircle, Clock, HardDrive, Trash2 } from "lucide-react";
+import { History, CheckCircle2, AlertCircle } from "lucide-react";
 import { ConversionResult } from "../types";
 
 interface HistoryPanelProps {
@@ -16,99 +16,69 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
         const k = 1024;
         const sizes = ["B", "KB", "MB", "GB"];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-    };
-
-    const calculateRatio = (orig: number, conv: number) => {
-        if (orig === 0 || conv === 0) return null;
-        const diff = orig - conv;
-        const percent = Math.round((diff / orig) * 100);
-        return percent;
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
     };
 
     return (
-        <div className="bg-surface rounded-2xl border border-border p-5 space-y-4">
+        <div className="flex flex-col h-full gap-4">
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <History className="w-4 h-4 text-brand-400" />
-                    <h3 className="font-semibold text-sm text-slate-200">Conversion History & Logs</h3>
-                </div>
+                <h3 className="text-tiny uppercase tracking-widest text-text-muted font-bold">Recent conversions</h3>
                 {history.length > 0 && (
                     <button
                         onClick={onClearHistory}
-                        className="text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1 transition-colors"
+                        className="text-tiny font-medium text-text-muted hover:text-text-primary transition-colors"
                     >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Clear Logs</span>
+                        Clear history
                     </button>
                 )}
             </div>
 
-            {history.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-4">
-                    No conversions recorded yet in this session.
-                </p>
-            ) : (
-                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1 text-xs">
-                    {history.map((item) => {
-                        const savings = calculateRatio(item.original_size_bytes, item.converted_size_bytes);
-                        return (
+            <div className="flex-1 overflow-y-auto custom-scrollbar -mx-1 px-1">
+                {history.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3 opacity-30">
+                        <History className="w-8 h-8 text-text-muted" />
+                        <span className="text-[12px] text-text-muted">No recent activity</span>
+                    </div>
+                ) : (
+                    <div className="space-y-1.5">
+                        {history.map((item) => (
                             <div
                                 key={item.job_id}
-                                className="p-3 rounded-xl bg-surface-raised border border-border/80 space-y-1.5"
+                                className="p-3 bg-surface-raised border border-border rounded-lg space-y-2 group"
                             >
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 truncate max-w-[70%]">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 truncate">
                                         {item.success ? (
-                                            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" />
                                         ) : (
-                                            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                                            <AlertCircle className="w-3.5 h-3.5 text-error shrink-0" />
                                         )}
-                                        <span className="font-medium text-slate-200 truncate">
-                                            {item.output_path.split("/").pop() || item.output_path}
+                                        <span className="text-[12px] font-medium text-text-secondary truncate">
+                                            {item.output_path.split(/[\\/]/).pop() || item.output_path}
                                         </span>
                                     </div>
-
-                                    <div className="flex items-center gap-2">
-                                        {item.success && savings !== null && (
-                                            <span
-                                                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${savings > 0
-                                                        ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-300"
-                                                        : "bg-surface border-border text-slate-400"
-                                                    }`}
-                                            >
-                                                {savings > 0 ? `-${savings}% smaller` : `${Math.abs(savings)}% larger`}
-                                            </span>
-                                        )}
-                                        <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
-                                            <Clock className="w-3 h-3" />
-                                            {item.elapsed_ms}ms
-                                        </span>
-                                    </div>
+                                    <span className="text-tiny font-mono text-text-disabled shrink-0">{item.elapsed_ms}ms</span>
                                 </div>
 
-                                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-border/40">
-                                    <div className="flex items-center gap-2 font-mono">
-                                        <HardDrive className="w-3 h-3 text-slate-500" />
+                                <div className="flex items-center justify-between text-tiny font-mono text-text-muted uppercase">
+                                    <div className="flex items-center gap-1.5">
                                         <span>{formatBytes(item.original_size_bytes)}</span>
-                                        <span>→</span>
-                                        <span className="text-slate-200">{formatBytes(item.converted_size_bytes)}</span>
+                                        <span className="text-text-disabled">→</span>
+                                        <span className={item.success ? "text-text-secondary" : "text-text-muted"}>
+                                            {formatBytes(item.converted_size_bytes)}
+                                        </span>
                                     </div>
-                                    <span className="truncate max-w-[200px] text-slate-500" title={item.output_path}>
-                                        {item.output_path}
-                                    </span>
+                                    {item.success && (
+                                        <span className="text-text-disabled">
+                                            {item.output_path.split('.').pop()?.toUpperCase()}
+                                        </span>
+                                    )}
                                 </div>
-
-                                {item.error && (
-                                    <p className="text-[11px] text-rose-300 bg-rose-950/30 border border-rose-500/20 rounded p-1.5 mt-1 font-mono">
-                                        {item.error}
-                                    </p>
-                                )}
                             </div>
-                        );
-                    })}
-                </div>
-            )}
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

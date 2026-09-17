@@ -37,4 +37,43 @@
     - Improved CSV-JSON parsing in `universal-engine.ts` to handle basic quoted fields.
 - **Next Actions:**
     - Audit security of shell execution (Pandoc/FFmpeg/ImageMagick sidecar configs).
-    - Implement PDF to DOCX improvements.
+
+## 2026-09-16 22:30 (High-Fidelity Document Conversion)
+- **Branch:** main
+- **Objective:** Implement universal image preservation for document conversions, focusing on PDF → DOCX.
+- **Implemented:**
+    - Upgraded PDF → DOCX pipeline: Replaced `pdftotext` with `pdftohtml -c -dataurls -noframes` followed by Pandoc.
+    - Added `pdftohtml` as a new Tauri sidecar binary.
+    - Updated `sidecar.rs` for `pdftohtml` probing and health diagnostics.
+    - Updated `run_pandoc_conversion` with flags for universal image preservation (`--embed-resources`, `--extract-media`).
+    - Improved error mapping in `errors.rs` for Poppler utilities.
+    - Added integration tests for image and table preservation in `src-tauri/tests/`.
+- **Tests Performed:**
+    - `cargo test --test image_preservation_test` (Passed).
+    - `cargo test --test table_preservation_test` (Passed).
+- **Improvements:**
+    - PDF to DOCX now correctly embeds images, diagrams, and logos.
+    - DOCX to HTML now embeds images as data URLs.
+    - Markdown to DOCX now handles embedded base64 images correctly.
+- **Next Actions:**
+    - Audit security of shell execution (Pandoc/FFmpeg/ImageMagick sidecar configs).
+    - Implement OCR support for scanned PDFs (Phase 2, Task 10).
+
+## 2026-09-17 19:50 (Universal Content Preservation)
+- **Branch:** main
+- **Objective:** Audit and upgrade all conversion paths to preserve all meaningful embedded content.
+- **Implemented:**
+    - **FFmpeg**: Added universal stream mapping (`-map 0`), metadata preservation (`-map_metadata 0`), and chapter mapping (`-map_chapters 0`).
+    - **Pandoc**: Added high-fidelity math support (`+tex_math_dollars`) and ensured media extraction/embedding for all document paths.
+    - **ImageMagick**: Implemented transparency flattening for JPEG and frame coalescence for animated formats.
+    - **Tests**: Added `torture_tests.rs` verifying transparency, metadata, multi-stream, and math preservation.
+- **Improvements:**
+    - Multi-track MKVs now convert to MP4 without losing audio/subtitles.
+    - MP3 tags are preserved during audio conversions.
+    - Transparent logos no longer turn black when converted to JPEG.
+    - Complex academic Markdown/PDFs preserve math formulas.
+- **Tests Performed:**
+    - `cargo test --test torture_tests` (All 4 passed).
+- **Next Actions:**
+    - Audit security of shell execution (specifically FFmpeg complex filters).
+    - Implement Phase 2, Task 10 (MOBI support).

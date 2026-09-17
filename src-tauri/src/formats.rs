@@ -77,6 +77,20 @@ pub fn get_category_for_extension(ext: &str) -> FileCategory {
     }
 }
 
+pub fn get_all_extensions() -> Vec<String> {
+    vec![
+        "mp4", "mkv", "mov", "avi", "webm", "flv", "wmv", "m4v", "ts", "3gp", "ogv", "vob", "gif",
+        "mp3", "wav", "flac", "aac", "ogg", "m4a", "opus", "wma", "aiff", "png", "jpg", "jpeg",
+        "webp", "avif", "bmp", "tiff", "ico", "heic", "tga", "psd", "pdf", "docx", "doc", "md",
+        "html", "txt", "epub", "rtf", "odt", "svg", "eps", "ai", "csv", "json", "xlsx", "xls",
+        "yaml", "xml", "toml", "sql", "sqlite", "db", "bib", "ics", "log", "zip", "tar", "gz",
+        "7z", "rar",
+    ]
+    .into_iter()
+    .map(|s| s.to_string())
+    .collect()
+}
+
 pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
     let category = get_category_for_extension(input_ext);
     let mut catalog = Vec::new();
