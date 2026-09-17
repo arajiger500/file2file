@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::registry::Registry;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -58,7 +59,21 @@ pub struct QuickPreset {
 }
 
 pub fn get_category_for_extension(ext: &str) -> FileCategory {
-    match ext.to_lowercase().as_str() {
+    let all = Registry::get_all_capabilities();
+    let ext_lower = ext.to_lowercase();
+
+    // First try to find it as a source format
+    if let Some(cap) = all.iter().find(|c| c.from_ext == ext_lower) {
+        return cap.category.clone();
+    }
+
+    // Then try as a target format
+    if let Some(cap) = all.iter().find(|c| c.to_ext == ext_lower) {
+        return cap.category.clone();
+    }
+
+    // Fallback to manual match for known categories that might not be in registry yet
+    match ext_lower.as_str() {
         "mp4" | "mkv" | "mov" | "avi" | "webm" | "flv" | "wmv" | "m4v" | "ts" | "3gp" | "ogv"
         | "vob" | "gif" => FileCategory::Video,
         "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" | "opus" | "wma" | "aiff" => {
@@ -78,195 +93,69 @@ pub fn get_category_for_extension(ext: &str) -> FileCategory {
 }
 
 pub fn get_all_extensions() -> Vec<String> {
-    vec![
-        "mp4", "mkv", "mov", "avi", "webm", "flv", "wmv", "m4v", "ts", "3gp", "ogv", "vob", "gif",
-        "mp3", "wav", "flac", "aac", "ogg", "m4a", "opus", "wma", "aiff", "png", "jpg", "jpeg",
-        "webp", "avif", "bmp", "tiff", "ico", "heic", "tga", "psd", "pdf", "docx", "doc", "md",
-        "html", "txt", "epub", "rtf", "odt", "svg", "eps", "ai", "csv", "json", "xlsx", "xls",
-        "yaml", "xml", "toml", "sql", "sqlite", "db", "bib", "ics", "log", "zip", "tar", "gz",
-        "7z", "rar",
-    ]
-    .into_iter()
-    .map(|s| s.to_string())
-    .collect()
+    let mut exts = std::collections::HashSet::new();
+    let all = Registry::get_all_capabilities();
+    for cap in all {
+        exts.insert(cap.from_ext);
+        exts.insert(cap.to_ext);
+    }
+    let mut list: Vec<String> = exts.into_iter().collect();
+    list.sort();
+    list
 }
 
 pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
-    let category = get_category_for_extension(input_ext);
-    let mut catalog = Vec::new();
-
-    match category {
-        FileCategory::Archive => {
-            let targets = ["zip"];
-            for t in targets {
-                if t == input_ext.to_lowercase() {
-                    continue;
-                }
-                catalog.push(FormatOption {
-                    extension: t.to_string(),
-                    name: "ZIP Archive".to_string(),
-                    category: FileCategory::Archive,
-                    subcategory: "Compression".to_string(),
-                    description: "High-performance ZIP compression".to_string(),
-                    comparison_note: None,
-                    is_lossless: true,
-                    is_recommended: true,
-                    recommended_for: vec!["Storage".to_string(), "Sharing".to_string()],
-                    sidecar_engine: "Rust-Native".to_string(),
-                    pros: vec!["Fast".to_string()],
-                    cons: vec![],
-                });
-            }
-            if input_ext.to_lowercase() == "zip" {
-                catalog.push(FormatOption {
-                    extension: "folder".to_string(),
-                    name: "Extract Archive".to_string(),
-                    category: FileCategory::Archive,
-                    subcategory: "Compression".to_string(),
-                    description: "Extract all files from ZIP".to_string(),
-                    comparison_note: None,
-                    is_lossless: true,
-                    is_recommended: true,
-                    recommended_for: vec!["Files".to_string()],
-                    sidecar_engine: "Rust-Native".to_string(),
-                    pros: vec!["Complete".to_string()],
-                    cons: vec![],
-                });
-            }
-        }
-        FileCategory::Data => {
-            let targets = [
-                "json", "csv", "yaml", "toml", "xml", "xlsx", "sql", "sqlite", "bib", "ics", "log",
-            ];
-            for t in targets {
-                if t == input_ext.to_lowercase() {
-                    continue;
-                }
-                // Filter out non-sensical targets (e.g. bib -> sqlite)
-                if (input_ext == "log" || input_ext == "bib" || input_ext == "ics" || input_ext == "sqlite" || input_ext == "db") && t != "json" {
-                    continue;
-                }
-
-                catalog.push(FormatOption {
-                    extension: t.to_string(),
-                    name: format!("{} Data", t.to_uppercase()),
-                    category: FileCategory::Data,
-                    subcategory: "Data Exchange".to_string(),
-                    description: format!("Structured {} transformation", t.to_uppercase()),
-                    comparison_note: None,
-                    is_lossless: true,
-                    is_recommended: true,
-                    recommended_for: vec!["Development".to_string(), "Analysis".to_string()],
-                    sidecar_engine: "Rust-Native".to_string(),
-                    pros: vec!["Fast".to_string(), "Precise".to_string()],
-                    cons: vec![],
-                });
-            }
-        }
-        FileCategory::Document => {
-            let targets = ["pdf", "docx", "md", "html", "txt", "rtf", "epub", "odt"];
-            for t in targets {
-                if t == input_ext.to_lowercase() {
-                    continue;
-                }
-                catalog.push(FormatOption {
-                    extension: t.to_string(),
-                    name: format!("{} Document", t.to_uppercase()),
-                    category: FileCategory::Document,
-                    subcategory: "Universal".to_string(),
-                    description: format!("Structural {} conversion", t.to_uppercase()),
-                    comparison_note: None,
-                    is_lossless: true,
-                    is_recommended: true,
-                    recommended_for: vec!["Editing".to_string()],
-                    sidecar_engine: "Pro-Core".to_string(),
-                    pros: vec!["High Fidelity".to_string()],
-                    cons: vec![],
-                });
-            }
-        }
-        FileCategory::Image | FileCategory::Vector => {
-            let targets = [
-                "webp", "avif", "png", "jpg", "ico", "bmp", "tiff", "pdf", "tga",
-            ];
-            for t in targets {
-                if t == input_ext.to_lowercase() {
-                    continue;
-                }
-                catalog.push(FormatOption {
-                    extension: t.to_string(),
-                    name: format!("{} Graphics", t.to_uppercase()),
-                    category: if t == "pdf" {
-                        FileCategory::Document
+    let caps = Registry::get_compatible_targets(input_ext);
+    caps.into_iter()
+        .map(|c| {
+            let name = match c.category {
+                FileCategory::Video => format!("{} Media", c.to_ext.to_uppercase()),
+                FileCategory::Audio => format!("{} Audio", c.to_ext.to_uppercase()),
+                FileCategory::Image => format!("{} Graphics", c.to_ext.to_uppercase()),
+                FileCategory::Document => format!("{} Document", c.to_ext.to_uppercase()),
+                FileCategory::Data => format!("{} Data", c.to_ext.to_uppercase()),
+                FileCategory::Archive => {
+                    if c.to_ext == "folder" {
+                        "Extract Archive".to_string()
                     } else {
-                        FileCategory::Image
-                    },
-                    subcategory: "Studio".to_string(),
-                    description: format!("Pixel-perfect {} encoding", t.to_uppercase()),
-                    comparison_note: None,
-                    is_lossless: ["png", "bmp", "tiff"].contains(&t),
-                    is_recommended: true,
-                    recommended_for: vec!["Web".to_string(), "Creative".to_string()],
-                    sidecar_engine: "ImageMagick".to_string(),
-                    pros: vec!["Clean".to_string()],
-                    cons: vec![],
-                });
-            }
-        }
-        FileCategory::Video => {
-            let targets = [
-                "mp4", "webm", "mkv", "mov", "avi", "gif", "mp3", "wav", "flac",
-            ];
-            for t in targets {
-                if t == input_ext.to_lowercase() {
-                    continue;
+                        "ZIP Archive".to_string()
+                    }
                 }
-                catalog.push(FormatOption {
-                    extension: t.to_string(),
-                    name: format!("{} Media", t.to_uppercase()),
-                    category: if ["mp3", "wav", "flac"].contains(&t) {
-                        FileCategory::Audio
-                    } else {
-                        FileCategory::Video
-                    },
-                    subcategory: "Broadcast".to_string(),
-                    description: format!("Native FFmpeg {} pipeline", t.to_uppercase()),
-                    comparison_note: None,
-                    is_lossless: false,
-                    is_recommended: true,
-                    recommended_for: vec!["All Devices".to_string()],
-                    sidecar_engine: "FFmpeg".to_string(),
-                    pros: vec!["Standard".to_string()],
-                    cons: vec![],
-                });
-            }
-        }
-        FileCategory::Audio => {
-            let targets = ["mp3", "wav", "flac", "aac", "ogg", "m4a", "opus"];
-            for t in targets {
-                if t == input_ext.to_lowercase() {
-                    continue;
-                }
-                catalog.push(FormatOption {
-                    extension: t.to_string(),
-                    name: format!("{} Audio", t.to_uppercase()),
-                    category: FileCategory::Audio,
-                    subcategory: "HiFi".to_string(),
-                    description: format!("Accurate {} audio master", t.to_uppercase()),
-                    comparison_note: None,
-                    is_lossless: ["flac", "wav"].contains(&t),
-                    is_recommended: true,
-                    recommended_for: vec!["Music".to_string()],
-                    sidecar_engine: "FFmpeg".to_string(),
-                    pros: vec!["Zero Jitter".to_string()],
-                    cons: vec![],
-                });
-            }
-        }
-        _ => {}
-    }
+                _ => format!("{} Format", c.to_ext.to_uppercase()),
+            };
 
-    catalog
+            let description = match c.category {
+                FileCategory::Video => format!("Native FFmpeg {} pipeline", c.to_ext.to_uppercase()),
+                FileCategory::Audio => format!("Accurate {} audio master", c.to_ext.to_uppercase()),
+                FileCategory::Image => format!("Pixel-perfect {} encoding", c.to_ext.to_uppercase()),
+                FileCategory::Document => format!("Structural {} conversion", c.to_ext.to_uppercase()),
+                FileCategory::Data => format!("Structured {} transformation", c.to_ext.to_uppercase()),
+                FileCategory::Archive => {
+                    if c.to_ext == "folder" {
+                        "Extract all files from ZIP".to_string()
+                    } else {
+                        "High-performance ZIP compression".to_string()
+                    }
+                }
+                _ => format!("Convert to {}", c.to_ext),
+            };
+
+            FormatOption {
+                extension: c.to_ext,
+                name,
+                category: c.category,
+                subcategory: c.subcategory,
+                description,
+                comparison_note: c.fidelity_note,
+                is_lossless: c.is_lossless,
+                is_recommended: true,
+                recommended_for: c.recommended_for,
+                sidecar_engine: c.engine.to_string(),
+                pros: vec!["Fast".to_string()],
+                cons: vec![],
+            }
+        })
+        .collect()
 }
 
 pub fn get_smart_recommendations(input_ext: &str) -> Vec<FormatOption> {

@@ -12,13 +12,17 @@ pub struct BinaryStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CategoryStatus {
+    pub category: String,
+    pub ready: bool,
+    pub engine: String,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SidecarHealthReport {
-    pub ffmpeg: BinaryStatus,
-    pub ffprobe: BinaryStatus,
-    pub pandoc: BinaryStatus,
-    pub imagemagick: BinaryStatus,
-    pub pdftotext: BinaryStatus,
-    pub pdftohtml: BinaryStatus,
+    pub binaries: Vec<BinaryStatus>,
+    pub categories: Vec<CategoryStatus>,
     pub all_ready: bool,
 }
 
@@ -196,13 +200,17 @@ pub async fn get_binary_command<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     cmd_name: &str,
 ) -> Result<tauri_plugin_shell::process::Command, String> {
+    let version_flag = match cmd_name {
+        "pandoc" | "magick" => "--version",
+        "pdftotext" | "pdftohtml" => "-v",
+        _ => "-version",
+    };
+
     // 1. Try bundled sidecar
     if let Ok(sidecar) = app.shell().sidecar(cmd_name) {
-        // Quick check if it actually runs
-        let output = sidecar.arg("-version").output().await;
+        let output = sidecar.arg(version_flag).output().await;
         if let Ok(out) = output {
              if out.status.success() || !out.stderr.is_empty() {
-                // Re-create the sidecar command because we consumed it in .output()
                 return Ok(app.shell().sidecar(cmd_name).map_err(|e| e.to_string())?);
              }
         }
@@ -217,7 +225,12 @@ pub async fn get_binary_command<R: tauri::Runtime>(
         });
 
         if bin_path.exists() {
-            return Ok(app.shell().command(bin_path.to_string_lossy().to_string()));
+            let output = std::process::Command::new(&bin_path).arg(version_flag).output();
+            if let Ok(out) = output {
+                if out.status.success() || !out.stderr.is_empty() {
+                    return Ok(app.shell().command(bin_path.to_string_lossy().to_string()));
+                }
+            }
         }
     }
 
@@ -228,15 +241,25 @@ pub async fn get_binary_command<R: tauri::Runtime>(
         cmd_name.to_string()
     };
 
-    // Check if actual_cmd exists in path
-    if let Ok(out) = std::process::Command::new(&actual_cmd).arg("-version").output() {
+    if let Ok(out) = std::process::Command::new(&actual_cmd).arg(version_flag).output() {
         if out.status.success() || !out.stderr.is_empty() {
              return Ok(app.shell().command(actual_cmd));
         }
     }
 
-    // Final fallback
-    Ok(app.shell().command(cmd_name))
+    // Last ditch for Windows
+    if cfg!(windows) {
+        if let Ok(out) = std::process::Command::new(cmd_name).arg(version_flag).output() {
+            if out.status.success() || !out.stderr.is_empty() {
+                return Ok(app.shell().command(cmd_name.to_string()));
+            }
+        }
+    }
+
+    Err(format!(
+        "Required dependency '{}' was not found. Please install it or place it in the application's bin folder.",
+        cmd_name
+    ))
 }
 
 pub async fn check_sidecar_health<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> SidecarHealthReport {
@@ -247,16 +270,59 @@ pub async fn check_sidecar_health<R: tauri::Runtime>(app: &tauri::AppHandle<R>) 
     let pdftotext = probe_sidecar(app, "pdftotext", "-v").await;
     let pdftohtml = probe_sidecar(app, "pdftohtml", "-v").await;
 
-    let all_ready =
-        ffmpeg.available && ffprobe.available && pandoc.available && imagemagick.available && pdftotext.available && pdftohtml.available;
+    let binaries = vec![
+        ffmpeg.clone(),
+        ffprobe.clone(),
+        pandoc.clone(),
+        imagemagick.clone(),
+        pdftotext.clone(),
+        pdftohtml.clone(),
+    ];
+
+    let categories = vec![
+        CategoryStatus {
+            category: "Video".to_string(),
+            ready: ffmpeg.available && ffprobe.available,
+            engine: "FFmpeg".to_string(),
+            message: if !ffmpeg.available { Some("FFmpeg missing".to_string()) } else { None },
+        },
+        CategoryStatus {
+            category: "Audio".to_string(),
+            ready: ffmpeg.available && ffprobe.available,
+            engine: "FFmpeg".to_string(),
+            message: if !ffmpeg.available { Some("FFmpeg missing".to_string()) } else { None },
+        },
+        CategoryStatus {
+            category: "Images".to_string(),
+            ready: imagemagick.available,
+            engine: "ImageMagick".to_string(),
+            message: if !imagemagick.available { Some("ImageMagick missing".to_string()) } else { None },
+        },
+        CategoryStatus {
+            category: "Documents".to_string(),
+            ready: pandoc.available && pdftotext.available && pdftohtml.available,
+            engine: "Pandoc + Poppler".to_string(),
+            message: if !pandoc.available { Some("Pandoc missing".to_string()) } else { None },
+        },
+        CategoryStatus {
+            category: "Data".to_string(),
+            ready: true,
+            engine: "Rust-Native".to_string(),
+            message: None,
+        },
+        CategoryStatus {
+            category: "Archives".to_string(),
+            ready: true,
+            engine: "Rust-Native".to_string(),
+            message: None,
+        },
+    ];
+
+    let all_ready = binaries.iter().all(|b| b.available);
 
     SidecarHealthReport {
-        ffmpeg,
-        ffprobe,
-        pandoc,
-        imagemagick,
-        pdftotext,
-        pdftohtml,
+        binaries,
+        categories,
         all_ready,
     }
 }

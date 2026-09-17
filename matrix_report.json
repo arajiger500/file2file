@@ -1,0 +1,3210 @@
+[
+  {
+    "input": "3gp",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 21,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "3gp",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "3gp",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "3gp",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "3gp",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "3gp",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "3gp",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "3gp",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "3gp",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "7z",
+    "output": "zip",
+    "success": true,
+    "duration_ms": 1,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "aac",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 5,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aac",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 6,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aac",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 6,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aac",
+    "output": "ogg",
+    "success": false,
+    "duration_ms": 3,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aac",
+    "output": "m4a",
+    "success": false,
+    "duration_ms": 7,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aac",
+    "output": "opus",
+    "success": false,
+    "duration_ms": 3,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ai",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 132,
+    "error": "magick: no images for write '-write' '../matrix_test_output/test_converted.webp' at CLI arg 2 @ error/operation.c/CLINoImageOperator/4952.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ai",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 65,
+    "error": "magick: no images for write '-write' '../matrix_test_output/test_converted.avif' at CLI arg 2 @ error/operation.c/CLINoImageOperator/4952.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ai",
+    "output": "png",
+    "success": false,
+    "duration_ms": 64,
+    "error": "magick: no images for write '-write' '../matrix_test_output/test_converted.png' at CLI arg 2 @ error/operation.c/CLINoImageOperator/4952.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ai",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 63,
+    "error": "magick: no images found for operation `-flatten' at CLI arg 4 @ error/operation.c/CLIOption/5456.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ai",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 62,
+    "error": "magick: no images for write '-write' '../matrix_test_output/test_converted.ico' at CLI arg 2 @ error/operation.c/CLINoImageOperator/4952.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ai",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 67,
+    "error": "magick: no images for write '-write' '../matrix_test_output/test_converted.bmp' at CLI arg 2 @ error/operation.c/CLINoImageOperator/4952.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ai",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 67,
+    "error": "magick: no images for write '-write' '../matrix_test_output/test_converted.tiff' at CLI arg 2 @ error/operation.c/CLINoImageOperator/4952.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ai",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 66,
+    "error": "magick: no images for write '-write' '../matrix_test_output/test_converted.tga' at CLI arg 2 @ error/operation.c/CLINoImageOperator/4952.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ai",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 64,
+    "error": "magick: no images for write '-write' '../matrix_test_output/test_converted.pdf' at CLI arg 2 @ error/operation.c/CLINoImageOperator/4952.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "aiff",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 8,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aiff",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aiff",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aiff",
+    "output": "aac",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aiff",
+    "output": "ogg",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aiff",
+    "output": "m4a",
+    "success": false,
+    "duration_ms": 3,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "aiff",
+    "output": "opus",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "avi",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "avi",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "avi",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "avi",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "avi",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "avi",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "avi",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "avi",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "avif",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 18,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "avif",
+    "output": "png",
+    "success": false,
+    "duration_ms": 18,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "avif",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 19,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "avif",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 18,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "avif",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 17,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "avif",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 18,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "avif",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 18,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "avif",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 19,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "bib",
+    "output": "json",
+    "success": true,
+    "duration_ms": 7,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "bmp",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.bmp' @ error/bmp.c/ReadBMPImage/660.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "bmp",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.bmp' @ error/bmp.c/ReadBMPImage/660.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "bmp",
+    "output": "png",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.bmp' @ error/bmp.c/ReadBMPImage/660.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "bmp",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.bmp' @ error/bmp.c/ReadBMPImage/660.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "bmp",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.bmp' @ error/bmp.c/ReadBMPImage/660.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "bmp",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: improper image header `../test_files/test.bmp' @ error/bmp.c/ReadBMPImage/660.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "bmp",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.bmp' @ error/bmp.c/ReadBMPImage/660.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "bmp",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: improper image header `../test_files/test.bmp' @ error/bmp.c/ReadBMPImage/660.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "csv",
+    "output": "json",
+    "success": true,
+    "duration_ms": 3,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "csv",
+    "output": "yaml",
+    "success": true,
+    "duration_ms": 1,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "csv",
+    "output": "toml",
+    "success": false,
+    "duration_ms": 1,
+    "error": "TOML serialization error: unsupported rust type",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "csv",
+    "output": "xml",
+    "success": true,
+    "duration_ms": 0,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "csv",
+    "output": "xlsx",
+    "success": true,
+    "duration_ms": 5,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "csv",
+    "output": "sql",
+    "success": true,
+    "duration_ms": 0,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "db",
+    "output": "json",
+    "success": true,
+    "duration_ms": 1,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "directory",
+    "output": "zip",
+    "success": true,
+    "duration_ms": 0,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "doc",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 278,
+    "error": "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live).",
+    "engine": "Pandoc"
+  },
+  {
+    "input": "doc",
+    "output": "docx",
+    "success": true,
+    "duration_ms": 54,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "doc",
+    "output": "md",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "doc",
+    "output": "html",
+    "success": true,
+    "duration_ms": 58,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "doc",
+    "output": "txt",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "doc",
+    "output": "rtf",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "doc",
+    "output": "epub",
+    "success": true,
+    "duration_ms": 45,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "doc",
+    "output": "odt",
+    "success": true,
+    "duration_ms": 35,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "docx",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 56,
+    "error": "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live).",
+    "engine": "Pandoc"
+  },
+  {
+    "input": "docx",
+    "output": "md",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "docx",
+    "output": "html",
+    "success": true,
+    "duration_ms": 58,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "docx",
+    "output": "txt",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "docx",
+    "output": "rtf",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "docx",
+    "output": "epub",
+    "success": true,
+    "duration_ms": 44,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "docx",
+    "output": "odt",
+    "success": true,
+    "duration_ms": 46,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "eps",
+    "output": "webp",
+    "success": true,
+    "duration_ms": 191,
+    "error": null,
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "eps",
+    "output": "avif",
+    "success": true,
+    "duration_ms": 152,
+    "error": null,
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "eps",
+    "output": "png",
+    "success": true,
+    "duration_ms": 185,
+    "error": null,
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "eps",
+    "output": "jpg",
+    "success": true,
+    "duration_ms": 166,
+    "error": null,
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "eps",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 156,
+    "error": "magick: width or height exceeds limit `../matrix_test_output/test_converted.ico' @ error/icon.c/WriteICONImage/1101.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "eps",
+    "output": "bmp",
+    "success": true,
+    "duration_ms": 151,
+    "error": null,
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "eps",
+    "output": "tiff",
+    "success": true,
+    "duration_ms": 158,
+    "error": null,
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "eps",
+    "output": "tga",
+    "success": true,
+    "duration_ms": 168,
+    "error": null,
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "eps",
+    "output": "pdf",
+    "success": true,
+    "duration_ms": 162,
+    "error": null,
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "epub",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 58,
+    "error": "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live).",
+    "engine": "Pandoc"
+  },
+  {
+    "input": "epub",
+    "output": "docx",
+    "success": true,
+    "duration_ms": 55,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "epub",
+    "output": "md",
+    "success": true,
+    "duration_ms": 24,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "epub",
+    "output": "html",
+    "success": true,
+    "duration_ms": 70,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "epub",
+    "output": "txt",
+    "success": true,
+    "duration_ms": 25,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "epub",
+    "output": "rtf",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "epub",
+    "output": "odt",
+    "success": true,
+    "duration_ms": 37,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "flac",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 9,
+    "error": "This file seems to have no tracks that can be converted to MP3. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flac",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 5,
+    "error": "This file seems to have no tracks that can be converted to WAV. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flac",
+    "output": "aac",
+    "success": false,
+    "duration_ms": 6,
+    "error": "This file seems to have no tracks that can be converted to AAC. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flac",
+    "output": "ogg",
+    "success": false,
+    "duration_ms": 6,
+    "error": "This file seems to have no tracks that can be converted to OGG. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flac",
+    "output": "m4a",
+    "success": false,
+    "duration_ms": 6,
+    "error": "This file seems to have no tracks that can be converted to M4A. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flac",
+    "output": "opus",
+    "success": false,
+    "duration_ms": 4,
+    "error": "This file seems to have no tracks that can be converted to OPUS. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flv",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flv",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flv",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flv",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flv",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flv",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flv",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flv",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "flv",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "gz",
+    "output": "zip",
+    "success": true,
+    "duration_ms": 1,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "heic",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 19,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "heic",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 19,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "heic",
+    "output": "png",
+    "success": false,
+    "duration_ms": 19,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "heic",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 20,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "heic",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 20,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "heic",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 18,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "heic",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 19,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "heic",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 18,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "heic",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 18,
+    "error": "ImageMagick does not support decoding this specific format on your system.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "html",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 67,
+    "error": "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live).",
+    "engine": "Pandoc"
+  },
+  {
+    "input": "html",
+    "output": "docx",
+    "success": true,
+    "duration_ms": 55,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "html",
+    "output": "md",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "html",
+    "output": "txt",
+    "success": true,
+    "duration_ms": 24,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "html",
+    "output": "rtf",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "html",
+    "output": "epub",
+    "success": true,
+    "duration_ms": 46,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "html",
+    "output": "odt",
+    "success": true,
+    "duration_ms": 35,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "ico",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.ico' @ error/icon.c/ReadICONImage/349.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ico",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.ico' @ error/icon.c/ReadICONImage/349.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ico",
+    "output": "png",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.ico' @ error/icon.c/ReadICONImage/349.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ico",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.ico' @ error/icon.c/ReadICONImage/349.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ico",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.ico' @ error/icon.c/ReadICONImage/349.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ico",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.ico' @ error/icon.c/ReadICONImage/349.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ico",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: improper image header `../test_files/test.ico' @ error/icon.c/ReadICONImage/349.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ico",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: improper image header `../test_files/test.ico' @ error/icon.c/ReadICONImage/349.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "ics",
+    "output": "json",
+    "success": true,
+    "duration_ms": 0,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "jpeg",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.jpeg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpeg",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.jpeg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpeg",
+    "output": "png",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: insufficient image data in file `../test_files/test.jpeg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpeg",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: insufficient image data in file `../test_files/test.jpeg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpeg",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: insufficient image data in file `../test_files/test.jpeg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpeg",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: insufficient image data in file `../test_files/test.jpeg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpeg",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.jpeg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpeg",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: insufficient image data in file `../test_files/test.jpeg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpeg",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.jpeg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpg",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.jpg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpg",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: insufficient image data in file `../test_files/test.jpg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpg",
+    "output": "png",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.jpg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpg",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: insufficient image data in file `../test_files/test.jpg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpg",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: insufficient image data in file `../test_files/test.jpg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpg",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 19,
+    "error": "magick: insufficient image data in file `../test_files/test.jpg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpg",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: insufficient image data in file `../test_files/test.jpg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "jpg",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.jpg' @ error/jpeg.c/ReadOneJPEGImage/1546.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "json",
+    "output": "csv",
+    "success": false,
+    "duration_ms": 0,
+    "error": "JSON parse error: expected ident at line 1 column 2",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "json",
+    "output": "yaml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "JSON parse error: expected ident at line 1 column 2",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "json",
+    "output": "toml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "JSON parse error: expected ident at line 1 column 2",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "json",
+    "output": "xml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "JSON parse error: expected ident at line 1 column 2",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "json",
+    "output": "xlsx",
+    "success": false,
+    "duration_ms": 0,
+    "error": "JSON parse error: expected ident at line 1 column 2",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "json",
+    "output": "sql",
+    "success": false,
+    "duration_ms": 0,
+    "error": "JSON parse error: expected ident at line 1 column 2",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "log",
+    "output": "json",
+    "success": true,
+    "duration_ms": 8,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "m4a",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4a",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4a",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4a",
+    "output": "aac",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4a",
+    "output": "ogg",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4a",
+    "output": "opus",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4v",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 513,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4v",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 509,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4v",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 506,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4v",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 511,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4v",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 505,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4v",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 6,
+    "error": "This file seems to have no tracks that can be converted to GIF. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4v",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 6,
+    "error": "This file seems to have no tracks that can be converted to MP3. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4v",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 5,
+    "error": "This file seems to have no tracks that can be converted to WAV. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "m4v",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 7,
+    "error": "This file seems to have no tracks that can be converted to FLAC. For example, you cannot extract audio from a silent video.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "md",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 69,
+    "error": "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live).",
+    "engine": "Pandoc"
+  },
+  {
+    "input": "md",
+    "output": "docx",
+    "success": true,
+    "duration_ms": 55,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "md",
+    "output": "html",
+    "success": true,
+    "duration_ms": 57,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "md",
+    "output": "txt",
+    "success": true,
+    "duration_ms": 24,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "md",
+    "output": "rtf",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "md",
+    "output": "epub",
+    "success": true,
+    "duration_ms": 46,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "md",
+    "output": "odt",
+    "success": true,
+    "duration_ms": 45,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "mkv",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mkv",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mkv",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 3,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mkv",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 8,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mkv",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mkv",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mkv",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mkv",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mov",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mov",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mov",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mov",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 3,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mov",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 8,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mov",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 3,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mov",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mov",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp3",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp3",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp3",
+    "output": "aac",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp3",
+    "output": "ogg",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp3",
+    "output": "m4a",
+    "success": false,
+    "duration_ms": 3,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp3",
+    "output": "opus",
+    "success": false,
+    "duration_ms": 8,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp4",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp4",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp4",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp4",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp4",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 3,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp4",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp4",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "mp4",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "odt",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 66,
+    "error": "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live).",
+    "engine": "Pandoc"
+  },
+  {
+    "input": "odt",
+    "output": "docx",
+    "success": true,
+    "duration_ms": 56,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "odt",
+    "output": "md",
+    "success": true,
+    "duration_ms": 24,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "odt",
+    "output": "html",
+    "success": true,
+    "duration_ms": 59,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "odt",
+    "output": "txt",
+    "success": true,
+    "duration_ms": 25,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "odt",
+    "output": "rtf",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "odt",
+    "output": "epub",
+    "success": true,
+    "duration_ms": 45,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "ogg",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 5,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogg",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 6,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogg",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 3,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogg",
+    "output": "aac",
+    "success": false,
+    "duration_ms": 8,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogg",
+    "output": "m4a",
+    "success": false,
+    "duration_ms": 3,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogg",
+    "output": "opus",
+    "success": false,
+    "duration_ms": 5,
+    "error": "An unexpected error occurred during conversion. The file might be corrupted or the settings are incompatible.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogv",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogv",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogv",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogv",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogv",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogv",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogv",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogv",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 3,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ogv",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "opus",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "opus",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "opus",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 3,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "opus",
+    "output": "aac",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "opus",
+    "output": "ogg",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "opus",
+    "output": "m4a",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "pdf",
+    "output": "docx",
+    "success": false,
+    "duration_ms": 25,
+    "error": "Syntax Warning: May not be a PDF file (continuing anyway)\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't read xref table\n\n",
+    "engine": "Poppler (Poppler-utils)"
+  },
+  {
+    "input": "pdf",
+    "output": "md",
+    "success": false,
+    "duration_ms": 23,
+    "error": "Syntax Warning: May not be a PDF file (continuing anyway)\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't read xref table\n\n",
+    "engine": "Poppler (Poppler-utils)"
+  },
+  {
+    "input": "pdf",
+    "output": "html",
+    "success": false,
+    "duration_ms": 25,
+    "error": "Syntax Warning: May not be a PDF file (continuing anyway)\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't read xref table\n\n",
+    "engine": "Poppler (Poppler-utils)"
+  },
+  {
+    "input": "pdf",
+    "output": "txt",
+    "success": false,
+    "duration_ms": 22,
+    "error": "Syntax Warning: May not be a PDF file (continuing anyway)\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't read xref table",
+    "engine": "Poppler (Poppler-utils)"
+  },
+  {
+    "input": "pdf",
+    "output": "rtf",
+    "success": false,
+    "duration_ms": 25,
+    "error": "Syntax Warning: May not be a PDF file (continuing anyway)\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't read xref table\n\n",
+    "engine": "Poppler (Poppler-utils)"
+  },
+  {
+    "input": "pdf",
+    "output": "epub",
+    "success": false,
+    "duration_ms": 23,
+    "error": "Syntax Warning: May not be a PDF file (continuing anyway)\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't read xref table\n\n",
+    "engine": "Poppler (Poppler-utils)"
+  },
+  {
+    "input": "pdf",
+    "output": "odt",
+    "success": false,
+    "duration_ms": 25,
+    "error": "Syntax Warning: May not be a PDF file (continuing anyway)\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't find trailer dictionary\n\nSyntax Error: Couldn't read xref table\n\n",
+    "engine": "Poppler (Poppler-utils)"
+  },
+  {
+    "input": "png",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 20,
+    "error": "magick: insufficient image data in file `../test_files/test.png' @ error/png.c/ReadPNGImage/3962.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "png",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.png' @ error/png.c/ReadPNGImage/3962.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "png",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.png' @ error/png.c/ReadPNGImage/3962.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "png",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.png' @ error/png.c/ReadPNGImage/3962.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "png",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.png' @ error/png.c/ReadPNGImage/3962.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "png",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: insufficient image data in file `../test_files/test.png' @ error/png.c/ReadPNGImage/3962.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "png",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.png' @ error/png.c/ReadPNGImage/3962.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "png",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: insufficient image data in file `../test_files/test.png' @ error/png.c/ReadPNGImage/3962.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "psd",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 20,
+    "error": "magick: improper image header `../test_files/test.psd' @ error/psd.c/ReadPSDImage/2449.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "psd",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.psd' @ error/psd.c/ReadPSDImage/2449.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "psd",
+    "output": "png",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.psd' @ error/psd.c/ReadPSDImage/2449.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "psd",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.psd' @ error/psd.c/ReadPSDImage/2449.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "psd",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.psd' @ error/psd.c/ReadPSDImage/2449.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "psd",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: improper image header `../test_files/test.psd' @ error/psd.c/ReadPSDImage/2449.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "psd",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.psd' @ error/psd.c/ReadPSDImage/2449.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "psd",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.psd' @ error/psd.c/ReadPSDImage/2449.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "psd",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.psd' @ error/psd.c/ReadPSDImage/2449.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "rar",
+    "output": "zip",
+    "success": true,
+    "duration_ms": 1,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "rtf",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 57,
+    "error": "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live).",
+    "engine": "Pandoc"
+  },
+  {
+    "input": "rtf",
+    "output": "docx",
+    "success": true,
+    "duration_ms": 56,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "rtf",
+    "output": "md",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "rtf",
+    "output": "html",
+    "success": true,
+    "duration_ms": 59,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "rtf",
+    "output": "txt",
+    "success": true,
+    "duration_ms": 24,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "rtf",
+    "output": "epub",
+    "success": true,
+    "duration_ms": 44,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "rtf",
+    "output": "odt",
+    "success": true,
+    "duration_ms": 34,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "sql",
+    "output": "json",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Unsupported data conversion: sql to json",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "sql",
+    "output": "csv",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Unsupported data conversion: sql to csv",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "sql",
+    "output": "yaml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Unsupported data conversion: sql to yaml",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "sql",
+    "output": "toml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Unsupported data conversion: sql to toml",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "sql",
+    "output": "xml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Unsupported data conversion: sql to xml",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "sql",
+    "output": "xlsx",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Unsupported data conversion: sql to xlsx",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "sqlite",
+    "output": "json",
+    "success": true,
+    "duration_ms": 0,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "svg",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 32,
+    "error": "magick: unable to read image data `../test_files/test.svg' @ error/svg.c/RenderRSVGImage/463.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "svg",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 26,
+    "error": "magick: unable to read image data `../test_files/test.svg' @ error/svg.c/RenderRSVGImage/463.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "svg",
+    "output": "png",
+    "success": false,
+    "duration_ms": 22,
+    "error": "magick: unable to read image data `../test_files/test.svg' @ error/svg.c/RenderRSVGImage/463.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "svg",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 25,
+    "error": "magick: unable to read image data `../test_files/test.svg' @ error/svg.c/RenderRSVGImage/463.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "svg",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 23,
+    "error": "magick: unable to read image data `../test_files/test.svg' @ error/svg.c/RenderRSVGImage/463.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "svg",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 24,
+    "error": "magick: unable to read image data `../test_files/test.svg' @ error/svg.c/RenderRSVGImage/463.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "svg",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 24,
+    "error": "magick: unable to read image data `../test_files/test.svg' @ error/svg.c/RenderRSVGImage/463.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "svg",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 25,
+    "error": "magick: unable to read image data `../test_files/test.svg' @ error/svg.c/RenderRSVGImage/463.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "svg",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 24,
+    "error": "magick: unable to read image data `../test_files/test.svg' @ error/svg.c/RenderRSVGImage/463.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tar",
+    "output": "zip",
+    "success": true,
+    "duration_ms": 2,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "tga",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: improper image header `../test_files/test.tga' @ error/tga.c/ReadTGAImage/221.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tga",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.tga' @ error/tga.c/ReadTGAImage/221.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tga",
+    "output": "png",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: improper image header `../test_files/test.tga' @ error/tga.c/ReadTGAImage/221.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tga",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.tga' @ error/tga.c/ReadTGAImage/221.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tga",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.tga' @ error/tga.c/ReadTGAImage/221.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tga",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.tga' @ error/tga.c/ReadTGAImage/221.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tga",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: improper image header `../test_files/test.tga' @ error/tga.c/ReadTGAImage/221.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tga",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: improper image header `../test_files/test.tga' @ error/tga.c/ReadTGAImage/221.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tiff",
+    "output": "webp",
+    "success": false,
+    "duration_ms": 20,
+    "error": "magick: Cannot read TIFF header. `../test_files/test.tiff' @ error/tiff.c/TIFFErrors/564.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tiff",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: Cannot read TIFF header. `../test_files/test.tiff' @ error/tiff.c/TIFFErrors/564.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tiff",
+    "output": "png",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: Cannot read TIFF header. `../test_files/test.tiff' @ error/tiff.c/TIFFErrors/564.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tiff",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: Cannot read TIFF header. `../test_files/test.tiff' @ error/tiff.c/TIFFErrors/564.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tiff",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 20,
+    "error": "magick: Cannot read TIFF header. `../test_files/test.tiff' @ error/tiff.c/TIFFErrors/564.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tiff",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: Cannot read TIFF header. `../test_files/test.tiff' @ error/tiff.c/TIFFErrors/564.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tiff",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: Cannot read TIFF header. `../test_files/test.tiff' @ error/tiff.c/TIFFErrors/564.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "tiff",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 19,
+    "error": "magick: Cannot read TIFF header. `../test_files/test.tiff' @ error/tiff.c/TIFFErrors/564.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "toml",
+    "output": "json",
+    "success": false,
+    "duration_ms": 2,
+    "error": "TOML parse error: TOML parse error at line 1, column 6\n  |\n1 | test data\n  |      ^\nexpected `.`, `=`\n",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "toml",
+    "output": "csv",
+    "success": false,
+    "duration_ms": 1,
+    "error": "TOML parse error: TOML parse error at line 1, column 6\n  |\n1 | test data\n  |      ^\nexpected `.`, `=`\n",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "toml",
+    "output": "yaml",
+    "success": false,
+    "duration_ms": 1,
+    "error": "TOML parse error: TOML parse error at line 1, column 6\n  |\n1 | test data\n  |      ^\nexpected `.`, `=`\n",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "toml",
+    "output": "xml",
+    "success": false,
+    "duration_ms": 1,
+    "error": "TOML parse error: TOML parse error at line 1, column 6\n  |\n1 | test data\n  |      ^\nexpected `.`, `=`\n",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "toml",
+    "output": "xlsx",
+    "success": false,
+    "duration_ms": 1,
+    "error": "TOML parse error: TOML parse error at line 1, column 6\n  |\n1 | test data\n  |      ^\nexpected `.`, `=`\n",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "toml",
+    "output": "sql",
+    "success": false,
+    "duration_ms": 1,
+    "error": "TOML parse error: TOML parse error at line 1, column 6\n  |\n1 | test data\n  |      ^\nexpected `.`, `=`\n",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "ts",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ts",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ts",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ts",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ts",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ts",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ts",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ts",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "ts",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "txt",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 58,
+    "error": "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live).",
+    "engine": "Pandoc"
+  },
+  {
+    "input": "txt",
+    "output": "docx",
+    "success": true,
+    "duration_ms": 56,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "txt",
+    "output": "md",
+    "success": true,
+    "duration_ms": 23,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "txt",
+    "output": "html",
+    "success": true,
+    "duration_ms": 61,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "txt",
+    "output": "rtf",
+    "success": true,
+    "duration_ms": 24,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "txt",
+    "output": "epub",
+    "success": true,
+    "duration_ms": 45,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "txt",
+    "output": "odt",
+    "success": true,
+    "duration_ms": 35,
+    "error": null,
+    "engine": "Pandoc"
+  },
+  {
+    "input": "vob",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "vob",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "vob",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "vob",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "vob",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "vob",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "vob",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "vob",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "vob",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wav",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wav",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wav",
+    "output": "aac",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wav",
+    "output": "ogg",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wav",
+    "output": "m4a",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wav",
+    "output": "opus",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "webm",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "webm",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "webm",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "webm",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "webm",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "webm",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "webm",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "webm",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "webp",
+    "output": "avif",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: no images found for operation `-coalesce' at CLI arg 1 @ error/operation.c/CLIOption/5456.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "webp",
+    "output": "png",
+    "success": false,
+    "duration_ms": 17,
+    "error": "magick: no images found for operation `-coalesce' at CLI arg 1 @ error/operation.c/CLIOption/5456.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "webp",
+    "output": "jpg",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: no images found for operation `-coalesce' at CLI arg 1 @ error/operation.c/CLIOption/5456.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "webp",
+    "output": "ico",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: no images found for operation `-coalesce' at CLI arg 1 @ error/operation.c/CLIOption/5456.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "webp",
+    "output": "bmp",
+    "success": false,
+    "duration_ms": 18,
+    "error": "magick: no images found for operation `-coalesce' at CLI arg 1 @ error/operation.c/CLIOption/5456.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "webp",
+    "output": "tiff",
+    "success": false,
+    "duration_ms": 20,
+    "error": "magick: no images found for operation `-coalesce' at CLI arg 1 @ error/operation.c/CLIOption/5456.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "webp",
+    "output": "tga",
+    "success": false,
+    "duration_ms": 20,
+    "error": "magick: no images found for operation `-coalesce' at CLI arg 1 @ error/operation.c/CLIOption/5456.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "webp",
+    "output": "pdf",
+    "success": false,
+    "duration_ms": 16,
+    "error": "magick: no images found for operation `-coalesce' at CLI arg 1 @ error/operation.c/CLIOption/5456.",
+    "engine": "ImageMagick"
+  },
+  {
+    "input": "wma",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wma",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 3,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wma",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wma",
+    "output": "aac",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wma",
+    "output": "ogg",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wma",
+    "output": "m4a",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wma",
+    "output": "opus",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wmv",
+    "output": "mp4",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wmv",
+    "output": "webm",
+    "success": false,
+    "duration_ms": 7,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wmv",
+    "output": "mkv",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wmv",
+    "output": "mov",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wmv",
+    "output": "avi",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wmv",
+    "output": "gif",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wmv",
+    "output": "mp3",
+    "success": false,
+    "duration_ms": 5,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wmv",
+    "output": "wav",
+    "success": false,
+    "duration_ms": 6,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "wmv",
+    "output": "flac",
+    "success": false,
+    "duration_ms": 4,
+    "error": "The input file appears to be corrupted or in an unsupported format.",
+    "engine": "FFmpeg"
+  },
+  {
+    "input": "xls",
+    "output": "json",
+    "success": false,
+    "duration_ms": 1,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xls",
+    "output": "csv",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xls",
+    "output": "yaml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xls",
+    "output": "toml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xls",
+    "output": "xml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xls",
+    "output": "xlsx",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xls",
+    "output": "sql",
+    "success": false,
+    "duration_ms": 1,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xlsx",
+    "output": "json",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xlsx",
+    "output": "csv",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xlsx",
+    "output": "yaml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xlsx",
+    "output": "toml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xlsx",
+    "output": "xml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xlsx",
+    "output": "sql",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Excel open error: Zip error: invalid Zip archive: Could not find EOCD",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xml",
+    "output": "json",
+    "success": true,
+    "duration_ms": 1,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xml",
+    "output": "csv",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Input must be an array of objects to convert to CSV",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xml",
+    "output": "yaml",
+    "success": true,
+    "duration_ms": 0,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xml",
+    "output": "toml",
+    "success": true,
+    "duration_ms": 0,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xml",
+    "output": "xlsx",
+    "success": true,
+    "duration_ms": 6,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "xml",
+    "output": "sql",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Unsupported data conversion: xml to sql",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "yaml",
+    "output": "json",
+    "success": true,
+    "duration_ms": 1,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "yaml",
+    "output": "csv",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Input must be an array of objects to convert to CSV",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "yaml",
+    "output": "toml",
+    "success": false,
+    "duration_ms": 0,
+    "error": "TOML serialization error: unsupported rust type",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "yaml",
+    "output": "xml",
+    "success": true,
+    "duration_ms": 0,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "yaml",
+    "output": "xlsx",
+    "success": true,
+    "duration_ms": 6,
+    "error": null,
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "yaml",
+    "output": "sql",
+    "success": false,
+    "duration_ms": 0,
+    "error": "Unsupported data conversion: yaml to sql",
+    "engine": "Rust-Native"
+  },
+  {
+    "input": "zip",
+    "output": "folder",
+    "success": true,
+    "duration_ms": 0,
+    "error": null,
+    "engine": "Rust-Native"
+  }
+]

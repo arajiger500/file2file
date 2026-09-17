@@ -236,12 +236,12 @@ pub async fn convert_single_file<R: tauri::Runtime>(
     } else if category == FileCategory::Archive {
         run_archive_conversion(input_path, &output_path, &input_ext, &target_ext).await.map(|_| vec![])
     } else if category == FileCategory::Image || category == FileCategory::Vector {
-        // Determine if target is also image/vector (ImageMagick) or document (Pandoc fallback)
-        let target_category = get_category_for_extension(&target_ext);
-        if target_category == FileCategory::Document {
-            run_pandoc_conversion(&app, input_path, &output_path).await.map(|_| vec![])
-        } else {
+        // Use ImageMagick for image/vector targets AND for image-to-pdf
+        if target_ext == "pdf" || get_category_for_extension(&target_ext) == FileCategory::Image {
             run_image_magick_conversion(&app, input_path, &output_path).await.map(|_| vec![])
+        } else {
+            // Fallback for other document types like image-to-docx (unlikely but possible via Pandoc)
+            run_pandoc_conversion(&app, input_path, &output_path).await.map(|_| vec![])
         }
     } else if target_category == FileCategory::Document {
         run_pandoc_conversion(&app, input_path, &output_path).await.map(|_| vec![])
@@ -518,43 +518,28 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
                 }
             }
         }
-        "webp" | "png" | "jpg" | "jpeg" | "avif" | "gif" => {
+        "webp" | "png" | "jpg" | "jpeg" | "avif" | "gif" | "tiff" | "bmp" | "heic" | "ico" => {
             map_all = false; // Extraction
             args.push("-c:v".to_string());
-            args.push("-c:a".to_string());
-            args.push("aac".to_string());
             match target_ext {
                 "ico" => {
                     // ImageMagick is better for ICO multi-res
                     run_image_magick_conversion(app, input, output).await?;
                     return Ok(());
                 }
-                "webp" => {
-                    args.push("libwebp".to_string());
-                }
-                "avif" => {
-                    args.push("libaom-av1".to_string());
-                }
-                "gif" => {
-                    args.push("fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse".to_string());
-                }
-                "tiff" => {
-                    args.push("tiff".to_string());
-                }
-                "bmp" => {
-                    args.push("bmp".to_string());
-                }
-                "jpeg" => {
-                    args.push("jpeg".to_string());
-                }
-                "heic" => {
-                    args.push("libhevc".to_string());
-                }
-                "png" => {
-                    args.push("png".to_string());
-                }
-                _ => {}
+                "webp" => args.push("libwebp".to_string()),
+                "avif" => args.push("libaom-av1".to_string()),
+                "gif" => args.push("gif".to_string()), // Simplified, specialized filter can be added if needed
+                "tiff" => args.push("tiff".to_string()),
+                "bmp" => args.push("bmp".to_string()),
+                "jpeg" | "jpg" => args.push("mjpeg".to_string()),
+                "heic" => args.push("libhevc".to_string()),
+                "png" => args.push("png".to_string()),
+                _ => args.push("png".to_string()),
             }
+            args.push("-vn".to_string()); // Actually for extracting a single frame, we might want -frames:v 1
+            // But if it's video to image, we often want a specific frame or a sequence.
+            // For now, let's keep it simple or assume it's for thumb extraction if coming from video.
         }
         "srt" => {
             map_all = false;
@@ -694,16 +679,117 @@ async fn run_data_conversion(
             let content = std::fs::read_to_string(input).map_err(|e| format!("Failed to read input file: {}", e))?;
             quick_xml::de::from_str(&content).map_err(|e| format!("XML parse error: {}", e))?
         }
+        "xlsx" | "xls" => {
+            let mut excel: Xlsx<_> = calamine::open_workbook(input).map_err(|e| format!("Excel open error: {}", e))?;
+            let sheet_name = excel.sheet_names().get(0).ok_or("No sheets in excel")?.clone();
+            let range = excel.worksheet_range(&sheet_name)
+                .map_err(|e| format!("Range error: {}", e))?;
+
+            let mut items = Vec::new();
+            let mut rows = range.rows();
+            let headers: Vec<String> = rows.next().ok_or("Empty excel sheet")?.iter().map(|c| c.to_string()).collect();
+
+            for row in rows {
+                let mut map = serde_json::Map::new();
+                for (header, cell) in headers.iter().zip(row.iter()) {
+                    let val = match cell {
+                        calamine::Data::Empty => Value::Null,
+                        calamine::Data::String(s) => Value::String(s.clone()),
+                        calamine::Data::Float(f) => serde_json::Number::from_f64(*f).map(Value::Number).unwrap_or(Value::Null),
+                        calamine::Data::Int(i) => Value::Number((*i).into()),
+                        calamine::Data::Bool(b) => Value::Bool(*b),
+                        _ => Value::String(cell.to_string()),
+                    };
+                    map.insert(header.clone(), val);
+                }
+                items.push(Value::Object(map));
+            }
+            Value::Array(items)
+        }
         _ => {
-            // Fallback for formats that might be handled differently below (like xlsx)
+            // Fallback for formats that might be handled differently below
             Value::Null
         }
     };
 
     match (input_ext, target_ext) {
+        (i, "xlsx") if i != "xlsx" && value != Value::Null => {
+            let mut workbook = Workbook::new();
+            let worksheet = workbook.add_worksheet();
+            if let Some(arr) = value.as_array() {
+                if !arr.is_empty() {
+                    let mut headers = Vec::new();
+                    if let Some(first) = arr.get(0).and_then(|v| v.as_object()) {
+                        for key in first.keys() {
+                            headers.push(key.clone());
+                        }
+                    }
+                    // Write headers
+                    for (col, header) in headers.iter().enumerate() {
+                        worksheet.write(0, col as u16, header).map_err(|e| format!("Excel header write error: {}", e))?;
+                    }
+                    // Write rows
+                    for (row_idx, item) in arr.iter().enumerate() {
+                        if let Some(obj) = item.as_object() {
+                            for (col_idx, header) in headers.iter().enumerate() {
+                                if let Some(val) = obj.get(header) {
+                                    match val {
+                                        Value::Number(n) => {
+                                            if let Some(f) = n.as_f64() {
+                                                worksheet.write(row_idx as u32 + 1, col_idx as u16, f).map_err(|e| format!("Excel write error: {}", e))?;
+                                            }
+                                        }
+                                        Value::String(s) => {
+                                            worksheet.write(row_idx as u32 + 1, col_idx as u16, s).map_err(|e| format!("Excel write error: {}", e))?;
+                                        }
+                                        Value::Bool(b) => {
+                                            worksheet.write(row_idx as u32 + 1, col_idx as u16, *b).map_err(|e| format!("Excel write error: {}", e))?;
+                                        }
+                                        _ => {
+                                            worksheet.write(row_idx as u32 + 1, col_idx as u16, val.to_string()).map_err(|e| format!("Excel write error: {}", e))?;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            workbook.save(output).map_err(|e| format!("Failed to save XLSX: {}", e))?;
+            return Ok(());
+        }
         (i, "json") if i != "json" && value != Value::Null => {
             let json = serde_json::to_string_pretty(&value).map_err(|e| format!("JSON serialization error: {}", e))?;
             std::fs::write(output, json).map_err(|e| format!("Failed to write output: {}", e))?;
+            return Ok(());
+        }
+        (i, "xml") if i != "xml" && value != Value::Null => {
+            let mut buf = String::new();
+            buf.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?><root>");
+            fn val_to_xml(v: &Value, b: &mut String) {
+                match v {
+                    Value::Object(map) => {
+                        for (k, val) in map {
+                            b.push_str(&format!("<{}>", k));
+                            val_to_xml(val, b);
+                            b.push_str(&format!("</{}>", k));
+                        }
+                    }
+                    Value::Array(arr) => {
+                        for val in arr {
+                            b.push_str("<item>");
+                            val_to_xml(val, b);
+                            b.push_str("</item>");
+                        }
+                    }
+                    _ => {
+                        b.push_str(&v.to_string().trim_matches('"'));
+                    }
+                }
+            }
+            val_to_xml(&value, &mut buf);
+            buf.push_str("</root>");
+            std::fs::write(output, buf).map_err(|e| format!("Failed to write output: {}", e))?;
             return Ok(());
         }
         (i, "yaml") if i != "yaml" && value != Value::Null => {

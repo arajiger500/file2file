@@ -105,17 +105,17 @@ Presets are intentionally presented as shortcuts into the same conversion pipeli
 
 Running the frontend with Vite does not require the desktop shell. Outside Tauri, `api.ts` routes calls to a browser-side `universal-engine.ts` implementation.
 
-That fallback currently supports real in-browser transformations for selected workflows such as:
+That fallback currently supports real in-browser transformations for a **strictly limited** set of workflows:
 
-- PDF → DOCX (text extraction into a generated DOCX package)
-- CSV ↔ JSON
-- Image → PNG / JPEG / WebP where the browser codec is available
-- Image → PDF
-- Text / Markdown / HTML → PDF or text/HTML outputs
+- **PDF → DOCX/TXT/HTML:** Basic text extraction into generated packages.
+- **CSV ↔ JSON:** Fully functional structured data conversion.
+- **Images:** Canvas-based transcoding to PNG, JPEG, and WebP.
+- **Image/Text → PDF:** PDF generation via jsPDF.
 
-For conversions that require the native desktop toolchain, the browser engine returns a clear message directing the user to the desktop application.
+> [!WARNING]
+> Browser mode is a development/resilience feature. It does **not** support video, audio, complex document transformations (Pandoc), or hardware acceleration. For these, the File2File desktop application is required.
 
-> **Important:** browser fallback is a development/resilience feature, not a promise that every desktop conversion is available in a normal web browser.
+Diagnostics in browser mode will correctly report that native hardware acceleration and sidecars are unavailable.
 
 ## 🔒 Privacy & Security
 

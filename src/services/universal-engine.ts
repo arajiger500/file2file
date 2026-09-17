@@ -11,12 +11,12 @@ import {
 export async function handleUniversalEngine<T>(cmd: string, args?: Record<string, any>): Promise<T> {
     if (cmd === "detect_hardware") {
         return {
-            gpu_vendor: "Accelerated Browser",
-            hardware_acceleration_supported: true,
+            gpu_vendor: "Generic Web Browser",
+            hardware_acceleration_supported: false,
             recommended_encoder: "wasm",
-            cpu_cores: navigator.hardwareConcurrency || 8,
+            cpu_cores: navigator.hardwareConcurrency || 1,
             available_encoders: [],
-            detected_gpus: ["GPU Rasterizer"]
+            detected_gpus: []
         } as unknown as T;
     }
 
@@ -27,11 +27,9 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
 
     if (cmd === "get_presets") {
         return [
-            { id: "pre-1", title: "PDF to Word (Editable)", target_name: "Word", from_category: "document", to_format: "docx", description: "Full structural extraction", badge: "Pro", icon: "file-text" },
-            { id: "pre-2", title: "Any Image to AVIF", target_name: "AVIF", from_category: "image", to_format: "avif", description: "Next-gen compression", badge: "New", icon: "image" },
-            { id: "pre-3", title: "Video to Animated WebP", target_name: "WebP", from_category: "video", to_format: "webp", description: "High-FPS loop", badge: "Media", icon: "video" },
-            { id: "pre-4", title: "Lossless Audio Extract", target_name: "FLAC", from_category: "video", to_format: "flac", description: "Prisine master quality", badge: "HiFi", icon: "music" },
-            { id: "pre-5", title: "Vectorize (SVG)", target_name: "SVG", from_category: "image", to_format: "svg", description: "Trace to paths", badge: "Art", icon: "sparkles" }
+            { id: "pre-1", title: "PDF to Word (Editable)", target_name: "Word", from_category: "document", to_format: "docx", description: "Text extraction in browser", badge: "Fast", icon: "file-text" },
+            { id: "pre-2", title: "Image to WebP", target_name: "WebP", from_category: "image", to_format: "webp", description: "Canvas transcoding", badge: "Web", icon: "image" },
+            { id: "pre-5", title: "Image to PDF", target_name: "PDF", from_category: "image", to_format: "pdf", description: "jsPDF wrapper", badge: "Tools", icon: "sparkles" }
         ] as unknown as T;
     }
 
@@ -85,7 +83,15 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
     }
 
     if (cmd === "check_sidecars") {
-        return { ffmpeg: { available: true }, all_ready: true } as unknown as T;
+        return {
+            ffmpeg: { available: false, name: "ffmpeg", path_or_sidecar: "browser_mode" },
+            ffprobe: { available: false, name: "ffprobe", path_or_sidecar: "browser_mode" },
+            pandoc: { available: false, name: "pandoc", path_or_sidecar: "browser_mode" },
+            imagemagick: { available: false, name: "magick", path_or_sidecar: "browser_mode" },
+            pdftotext: { available: false, name: "pdftotext", path_or_sidecar: "browser_mode" },
+            pdftohtml: { available: false, name: "pdftohtml", path_or_sidecar: "browser_mode" },
+            all_ready: false
+        } as unknown as T;
     }
 
     return [] as unknown as T;
@@ -234,9 +240,13 @@ function getFullFormatCatalog(ext: string): FormatOption[] {
     const catalog: FormatOption[] = [];
 
     if (isDoc) {
-        const docTargets = ext === "pdf"
-            ? ["docx", "md", "html", "txt"]
-            : ["pdf", "md", "html", "txt"];
+        let docTargets: string[] = [];
+        if (ext === "pdf") {
+            docTargets = ["docx", "txt", "html"];
+        } else if (["md", "txt", "html"].includes(ext)) {
+            docTargets = ["pdf", "md", "html", "txt"];
+        }
+
         docTargets.forEach(t => {
             if (t === ext) return;
             catalog.push({
@@ -244,19 +254,19 @@ function getFullFormatCatalog(ext: string): FormatOption[] {
                 name: `${t.toUpperCase()} Document`,
                 category: "document",
                 subcategory: "Universal",
-                description: `Structural ${t.toUpperCase()} transcode`,
-                comparison_note: null,
+                description: `Browser-based ${t.toUpperCase()} export`,
+                comparison_note: ext === "pdf" ? "Basic text extraction only" : null,
                 is_lossless: true,
                 is_recommended: true,
-                recommended_for: ["Editing", "Publishing"],
-                sidecar_engine: "Pro-Core",
-                pros: ["Precise"],
-                cons: []
+                recommended_for: ["Editing", "Sharing"],
+                sidecar_engine: "Browser-Core",
+                pros: ["No install needed"],
+                cons: ["Limited fidelity"]
             });
         });
     }
 
-    if (isImg || ext === "svg") {
+    if (isImg) {
         const imgTargets = ["webp", "png", "jpg", "pdf"];
         imgTargets.forEach(t => {
             if (t === ext) return;
@@ -265,12 +275,12 @@ function getFullFormatCatalog(ext: string): FormatOption[] {
                 name: `${t.toUpperCase()} Image`,
                 category: t === "pdf" ? "document" : "image",
                 subcategory: "Graphics",
-                description: `Pixel-perfect ${t.toUpperCase()} encoding`,
+                description: `Canvas-based ${t.toUpperCase()} encoding`,
                 comparison_note: null,
-                is_lossless: ["png", "bmp", "tiff"].includes(t),
+                is_lossless: ["png"].includes(t),
                 is_recommended: true,
-                recommended_for: ["Web", "Design"],
-                sidecar_engine: "Canvas-X",
+                recommended_for: ["Web"],
+                sidecar_engine: "Browser-Canvas",
                 pros: ["Fast"],
                 cons: []
             });
@@ -285,12 +295,12 @@ function getFullFormatCatalog(ext: string): FormatOption[] {
                 name: `${t.toUpperCase()} Data`,
                 category: "data",
                 subcategory: "Universal",
-                description: `Structured ${t.toUpperCase()} transformation`,
+                description: `JS-based ${t.toUpperCase()} conversion`,
                 comparison_note: null,
                 is_lossless: true,
                 is_recommended: true,
-                recommended_for: ["Analysis", "Development"],
-                sidecar_engine: "JS-Core",
+                recommended_for: ["Analysis"],
+                sidecar_engine: "JS-Logic",
                 pros: ["Precise"],
                 cons: []
             });

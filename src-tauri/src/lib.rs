@@ -3,6 +3,7 @@ pub mod formats;
 pub mod hardware;
 pub mod sidecar;
 pub mod errors;
+pub mod registry;
 
 mod commands {
     use super::*;
