@@ -28,3 +28,26 @@ binaries/
 src-tauri/binaries/
 src-tauri/sample_test.*
 .aider*
+
+# Test & Generated Artifacts
+.artifacts/
+matrix_test_output/
+stress_batch_output/
+stress_batch_files/
+matrix_report.md
+matrix_report.json
+test-output/
+test-results/
+benchmark-results/
+coverage/
+*_converted.*
+*.tmp
+*.temp
+*.log
+*.bak
+*.orig
+*.cache
+debug-output/
+qa-output/
+conversion-output/
+
