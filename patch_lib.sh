@@ -1,1 +1,0 @@
-sed -i 's/if dest.contains("..") {/if dest.contains("..") || dest.contains("\\0") {\n            return Err("Path traversal or null bytes not allowed".to_string());\n        }\n\n        let dest_path = Path::new(\&dest);\n        if dest_path.exists() {\n            return Err("Destination file already exists".to_string());\n        }/g' src-tauri/src/lib.rs
