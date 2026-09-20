@@ -1,253 +1,156 @@
-# File2File
+# File2File v0.2.0
 
-> **Universal local file conversion — private by design.**
+> **A local-first desktop file converter for Windows, macOS and Linux.**
 >
-> Convert media, documents, images, structured data, and archives without sending your files to a cloud service.
+> Convert documents, images, audio, video and structured data without uploading your files to a cloud service.
 
-[![Tauri 2](https://img.shields.io/badge/Tauri-2.0-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
+[![Version](https://img.shields.io/badge/version-0.2.0-informational)](https://github.com/arajiger500/file2file/releases/tag/v0.2.0)
+[![Tauri 2](https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![Rust](https://img.shields.io/badge/backend-Rust-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![React](https://img.shields.io/badge/frontend-React-61DAFB?logo=react&logoColor=111)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![TypeScript](https://img.shields.io/badge/frontend-TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-File2File is a Tauri 2 desktop application with a React + TypeScript UI and a Rust conversion core. Its architecture is designed around **local processing first**: desktop conversions use local binaries/sidecars, while the browser development mode provides a lightweight fallback engine for supported transformations.
+## Download
 
-## ✨ What File2File Can Do
+Release **v0.2.0** is built for:
 
-### Local conversion core
+| Platform | Artifacts |
+|---|---|
+| Windows x64 | NSIS installer + MSI |
+| macOS Apple Silicon | DMG |
+| macOS Intel | DMG |
+| Linux x64 | AppImage + DEB |
 
-The desktop app routes conversions through the appropriate local engine:
+[Open the latest releases](https://github.com/arajiger500/file2file/releases)
 
-| Content type | Main engine | Examples |
-|---|---|---|
-| Video & audio | **FFmpeg** | MP4, MKV, MOV, AVI, WebM, MP3, WAV, FLAC, AAC, OGG, M4A, Opus |
-| Images & graphics | **ImageMagick** | PNG, JPEG, WebP, AVIF, TIFF, BMP, HEIC, PSD, SVG-related workflows |
-| Documents | **Pandoc + Poppler** | PDF, DOCX, Markdown, HTML, TXT, EPUB, RTF, ODT |
-| Structured data | **Rust-native** | CSV, JSON, YAML, TOML, XML, XLSX, SQL, SQLite, BibTeX, ICS, logs |
-| Archives | **Rust-native** | ZIP creation and extraction |
+The release workflow runs independently on each native runner, so each package is built for its real CPU architecture.
 
-The project currently exposes a large catalog of conversion paths and groups formats by video, audio, image, document, vector, data, and archive categories. The UI also surfaces format-specific metadata such as lossless status, recommended targets, engine/core, pros, and cons.
+## What it does
 
-### 🧠 Smart format recommendations
+File2File provides one conversion workflow for several file families:
 
-After importing a file, File2File can generate a short list of recommended output formats based on the input type. There is also a dedicated format browser with search and category filters for exploring compatible targets.
+- **Documents:** PDF, DOCX, HTML, Markdown, TXT, EPUB, RTF, ODT
+- **Data:** CSV, JSON, YAML, TOML, XML, XLSX, SQL, SQLite, BibTeX, ICS and logs
+- **Images:** PNG, JPEG, WebP, AVIF, BMP, TIFF, ICO, HEIC, TGA, PSD and supported vector inputs
+- **Media:** MP4, MKV, MOV, AVI, WebM, GIF, MP3, WAV, FLAC, AAC, OGG, M4A and Opus
+- **Archives:** ZIP creation/extraction and folder archiving
 
-### 📦 Batch conversion
+Actual availability is determined by the input/target pair and the conversion engines installed on the machine.
 
-Add multiple files to a queue and process them as a batch. Desktop drag-and-drop accepts individual files **and entire directories**; directories are recursively scanned before being added to the queue.
+## Desktop architecture
 
-### ⚙️ Advanced conversion controls
+```text
+React + TypeScript UI
+        │
+        ▼
+Tauri 2 IPC
+        │
+        ▼
+Rust conversion core
+   ┌────┼───────────────┐
+   │    │               │
+FFmpeg ImageMagick   Pandoc/Poppler
+   │    │               │
+   └────┼───────────────┘
+        │
+ Rust-native data/archive conversion
+```
 
-The settings drawer exposes:
+The backend resolves conversion engines in this order:
 
-- **CRF / rate control:** 0–51
-- **Resolution targeting:** Original, 4K UHD, 1080p, 720p, or SD
-- **Hardware acceleration:** enabled/disabled when supported
-- **Encoder selection:** automatic selection or a detected encoder profile
-- **Metadata stripping:** remove common privacy-sensitive metadata such as GPS, camera, author, and timestamp fields where the selected conversion supports it
-- **Audio bitrate:** 64k–320k presets
+1. app-local/bundled engine when available
+2. application data `bin/` directory
+3. system `PATH`
 
-### 🚀 Hardware-aware encoding
+This release intentionally does **not** fake bundled converter binaries. The desktop application can start without them, but conversion categories that depend on external engines require those engines to be installed.
 
-At startup, the Rust backend probes the available FFmpeg encoder capabilities and platform hints. Depending on the machine and installed FFmpeg build, File2File can expose hardware encoders such as:
+## Engine requirements
 
-- NVIDIA **NVENC** (`h264_nvenc`, `hevc_nvenc`)
-- Intel **Quick Sync** (`h264_qsv`)
-- AMD / Linux **VA-API / AMF** (`h264_vaapi`)
-- Apple **VideoToolbox** (`h264_videotoolbox`)
-- CPU fallback using **libx264** / **libx265**
+### Windows
 
-The application also reports the detected CPU core count and uses it to size its batch worker pool.
+Install:
 
-### ✅ Pre-flight validation
-
-Before a batch starts, media files can be inspected with `ffprobe`. Validation checks that inputs exist and, for media jobs, verifies stream availability such as whether an audio track exists for an audio-only target. Warnings and friendly error messages are surfaced in the UI instead of exposing raw process failures where possible.
-
-### 🩺 Engine diagnostics
-
-The built-in **Engine Health** panel checks the availability and version of the conversion cores:
-
-- FFmpeg
-- FFprobe
+- FFmpeg + FFprobe
 - Pandoc
-- ImageMagick (`magick`)
-- Poppler `pdftotext`
+- ImageMagick
+- Poppler utilities (`pdftotext`, `pdftohtml`)
 
-File2File can operate in a **limited-capability mode** when some tools are unavailable, while keeping the diagnostics visible so missing dependencies are easy to identify.
+Make sure the executables are available on `PATH`.
 
-### 📜 Session history
+### macOS
 
-Completed jobs are recorded in the current session with:
+Install the same engine set with your preferred package manager, or place the executables in the application's local `bin/` directory.
 
-- output filename/path
-- success or failure state
-- elapsed conversion time
-- original vs. converted size
-- estimated percentage size change
-- conversion error details when a job fails
+### Linux
 
-There is also a **Clear Logs** action for the session history.
+The DEB package declares the main runtime packages it needs. AppImage users should install:
 
-## ⚡ Quick Workflows
+- FFmpeg + FFprobe
+- Pandoc
+- ImageMagick
+- Poppler utilities
 
-The dashboard exposes preset workflows for common jobs, including examples such as:
+The Engine Health panel shows which engines File2File can currently see.
 
-- PDF → editable Word
-- Image → WebP / AVIF
-- Video → MP4
-- Video → MP3 / FLAC
-- Video → animated WebP
-- Image → SVG/vector-oriented workflow
+## Features
 
-Presets are intentionally presented as shortcuts into the same conversion pipeline rather than as separate conversion systems.
+### Batch conversion
 
-## 🌐 Browser / Development Fallback
+Drop multiple files or a directory. Directories are scanned recursively and jobs are processed through a bounded queue.
 
-Running the frontend with Vite does not require the desktop shell. Outside Tauri, `api.ts` routes calls to a browser-side `universal-engine.ts` implementation.
+### Smart format selection
 
-That fallback currently supports real in-browser transformations for a **strictly limited** set of workflows:
+Compatible targets and smart suggestions are derived from the format registry rather than exposing arbitrary extension combinations.
 
-- **PDF → DOCX/TXT/HTML:** Basic text extraction into generated packages.
-- **CSV ↔ JSON:** Fully functional structured data conversion.
-- **Images:** Canvas-based transcoding to PNG, JPEG, and WebP.
-- **Image/Text → PDF:** PDF generation via jsPDF.
+### Advanced controls
 
-> [!WARNING]
-> Browser mode is a development/resilience feature. It does **not** support video, audio, complex document transformations (Pandoc), or hardware acceleration. For these, the File2File desktop application is required.
+Depending on the conversion:
 
-Diagnostics in browser mode will correctly report that native hardware acceleration and sidecars are unavailable.
+- CRF / rate control
+- target resolution
+- hardware encoder selection
+- metadata stripping
+- audio bitrate
+- output collision policy
+- retry/cancel handling
 
-## 🔒 Privacy & Security
+### Validation and failure handling
 
-File2File is designed around a local-first workflow:
+Media inputs can be probed before conversion. Jobs verify their final output before reporting success, use isolated temporary workspaces, and expose human-readable errors.
 
-- Conversion requests are handled locally by the desktop application and its conversion tools.
-- Desktop tooling prefers bundled Tauri sidecars, then checks the application's local `bin/` directory, with system `PATH` as a fallback.
-- Shell commands are constructed with explicit argument arrays rather than shell-string interpolation.
-- Target format values are sanitized before they are used in output filenames.
-- File paths are validated before conversion and path handling avoids unsafe `unwrap()` assumptions in the Rust conversion code.
-- PDF conversion uses a temporary text file and removes it after the operation completes.
+### Browser fallback
 
-**Privacy note:** “local/offline” depends on the desktop build and the binaries available to it. The application itself is designed not to upload conversion inputs, but the browser fallback can load its PDF.js worker from a CDN when that workflow is used.
+Running the Vite frontend outside Tauri enables a limited browser-only fallback for supported lightweight transformations.
 
-## 🏗️ Architecture
+It is **not** a replacement for the desktop conversion pipeline and does not provide native FFmpeg, ImageMagick, Pandoc or GPU functionality.
 
-```text
-file2file/
-├── src/                              # React + TypeScript UI
-│   ├── components/
-│   │   ├── AdvancedSettingsDrawer.tsx
-│   │   ├── ConversionStudio.tsx
-│   │   ├── DiagnosticModal.tsx
-│   │   ├── DropZone.tsx
-│   │   ├── FormatSelectionPage.tsx
-│   │   ├── Header.tsx
-│   │   ├── HistoryPanel.tsx
-│   │   └── QuickConverters.tsx
-│   ├── services/
-│   │   ├── api.ts                    # Tauri IPC + browser fallback router
-│   │   └── universal-engine.ts       # Selected browser-side conversions
-│   ├── types/
-│   │   └── index.ts
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── index.css
-│
-├── src-tauri/                        # Rust + Tauri 2 backend
-│   ├── binaries/                     # Optional bundled sidecars
-│   ├── capabilities/
-│   └── src/
-│       ├── converter.rs              # Validation, routing & conversion execution
-│       ├── formats.rs                # Format catalog & smart recommendations
-│       ├── hardware.rs               # Encoder/GPU capability detection
-│       ├── sidecar.rs                # Engine probing & command resolution
-│       ├── errors.rs                 # Human-friendly error mapping
-│       ├── lib.rs                    # Tauri commands & application setup
-│       └── main.rs
-│
-├── GOAL.md                           # Project objective
-├── PROGRESSION.md                    # Development journal
-├── DECISIONS.md                      # Architectural decisions
-├── FAILURES.md                       # Known failures / incidents
-├── TODO.md                           # Implementation checklist
-├── package.json
-├── tailwind.config.js
-├── tsconfig.json
-├── vite.config.ts
-└── LICENSE
-```
+## Privacy
 
-## 🔧 How the Desktop Pipeline Works
+Desktop conversion is local. File2File does not require a cloud conversion service.
 
-At a high level, a conversion follows this path:
+The browser development fallback is intentionally separate from the desktop engine stack; it can use browser resources such as PDF.js and should not be treated as an equivalent to the fully offline desktop environment.
 
-```text
-User drops files
-      │
-      ▼
-File detection + category inference
-      │
-      ├── Smart suggestions
-      └── Compatible format catalog
-      │
-      ▼
-Pre-flight validation
-      │
-      ▼
-Conversion Studio
-      │
-      ├── Rust-native data/archive conversion
-      ├── Pandoc / Poppler document conversion
-      ├── ImageMagick graphics conversion
-      └── FFmpeg media conversion
-                │
-                ├── hardware encoder when available
-                └── CPU fallback
-      │
-      ▼
-Result + size/time metrics
-      │
-      ▼
-Session history / export
-```
+## Development
 
-For batches, the frontend starts multiple workers and uses the detected CPU core count as the concurrency limit. Each file is validated and then passed independently through the same backend conversion path.
+Requirements:
 
-## 📦 Requirements
+- Node.js + npm
+- Rust + Cargo
+- Tauri 2 prerequisites for your OS
 
-### Desktop development
-
-You need:
-
-- **Node.js** 18+ and npm
-- **Rust** + Cargo (recommended installation via [rustup](https://rustup.rs/))
-- Tauri 2 development prerequisites for your operating system
-
-For the desktop conversion toolchain, provide:
-
-- `ffmpeg`
-- `ffprobe`
-- `pandoc`
-- `magick` (ImageMagick)
-- `pdftotext` (Poppler)
-
-The application can use bundled sidecars instead of requiring all binaries to be globally installed.
-
-## ▶️ Development
-
-Install JavaScript dependencies:
+Install dependencies:
 
 ```bash
-npm install
+npm ci
 ```
 
-Run the browser frontend:
+Run the browser UI:
 
 ```bash
 npm run dev
 ```
 
-Run the full Tauri desktop application with live reload:
+Run the desktop app:
 
 ```bash
 npm run tauri dev
@@ -259,69 +162,58 @@ Build the frontend:
 npm run build
 ```
 
-Build the desktop bundles/installers:
+Build the desktop package locally:
+
+```npm run tauri build
+```
+
+## Testing
+
+The project contains Rust tests and conversion-oriented integration tests.
+
+CI runs:
+
+- frontend build/typecheck
+- Rust formatting
+- Rust library tests
+- native desktop builds
+
+Release CI additionally produces the platform installers/packages.
+
+## Release process
+
+Create a version commit, then push a tag such as:
 
 ```bash
-npm run tauri build
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
-The Tauri configuration is set up to bundle targets across Windows, macOS, and Linux, with NSIS/WiX support on Windows and DMG/AppImage/DEB-oriented packaging configuration for desktop distribution.
+The release workflow builds the following native targets:
 
-## 🧩 Sidecar Layout
+- `aarch64-apple-darwin`
+- `x86_64-apple-darwin`
+- `x86_64-unknown-linux-gnu`
+- `x86_64-pc-windows-msvc`
 
-Tauri expects external binaries to follow its target-triple naming convention inside `src-tauri/binaries/`.
+The GitHub Actions release is created from that tag and publishes the native installers/packages.
 
-Example layout:
+## Project files
 
 ```text
-src-tauri/binaries/
-├── ffmpeg-<target-triple>[.exe]
-├── ffprobe-<target-triple>[.exe]
-├── pandoc-<target-triple>[.exe]
-├── magick-<target-triple>[.exe]
-└── pdftotext-<target-triple>[.exe]
+src/                React + TypeScript UI
+src-tauri/          Tauri + Rust backend
+GOAL.md             project objectives
+TODO.md             implementation checklist
+PROGRESSION.md      engineering history
+DECISIONS.md        architecture decisions
+FAILURES.md         failure log
 ```
 
-When a bundled binary is unavailable, the backend checks the app data `bin/` directory and then the normal system `PATH`.
+## License
 
-## 🧪 Testing & Project Status
-
-The Rust side includes unit/integration-oriented tests for core functionality. Recent development work has covered JSON/CSV edge cases, ZIP handling, path validation, sidecar management, and conversion error handling.
-
-The project is under active development. Some formats and workflows are deliberately marked as incomplete or limited, and frontend Vitest/React Testing Library coverage is still planned.
-
-For the living implementation checklist and current roadmap, see [`TODO.md`](./TODO.md). For implementation history, see [`PROGRESSION.md`](./PROGRESSION.md).
-
-## 🗺️ Current Scope
-
-The current codebase includes conversion support across these broad families:
-
-- **Documents:** PDF, DOCX, Markdown, HTML, TXT, EPUB, RTF, ODT
-- **Data:** CSV, JSON, YAML, TOML, XML, XLSX, SQL, SQLite, BibTeX, ICS, logs
-- **Images / graphics:** PNG, JPEG, WebP, AVIF, BMP, TIFF, ICO, HEIC, TGA, PSD, SVG-related workflows
-- **Media:** MP4, MKV, MOV, AVI, WebM, GIF plus common audio formats such as MP3, WAV, FLAC, AAC, OGG, M4A, and Opus
-- **Archives:** ZIP creation/extraction and recursive folder-to-archive workflows
-
-Exact compatibility is determined by the input/target pair and the engines available in the current desktop installation. The UI intentionally filters and recommends conversions instead of treating every possible pair as valid.
-
-## 🤝 Contributing
-
-Contributions are welcome. Before making a larger change, review the project memory files:
-
-```text
-GOAL.md
-PROGRESSION.md
-DECISIONS.md
-FAILURES.md
-TODO.md
-```
-
-When adding a new conversion path, update the format catalog, backend routing, validation/error handling, and relevant tests rather than adding a one-off UI shortcut.
-
-## 📄 License
-
-See [`LICENSE`](./LICENSE).
+See [LICENSE](./LICENSE).
 
 ---
 
-**File2File** — convert files locally, keep the pipeline understandable, and keep your data where it belongs: on your machine.
+**File2File v0.2.0** — local conversion, explicit engines, predictable packaging.
