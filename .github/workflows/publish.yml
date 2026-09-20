@@ -1,3 +1,4 @@
+# Release builds: push to the release branch creates/updates the v__VERSION__ GitHub Release.
 name: Release
 
 on:
