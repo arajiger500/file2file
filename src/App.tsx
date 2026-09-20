@@ -1,3 +1,4 @@
+import { isTauri } from "./services/api";
 import { useEffect, useState } from "react";
 import { Header } from "./components/Header";
 import { DropZone } from "./components/DropZone";
@@ -40,6 +41,8 @@ export function App() {
         selectedEncoder: "auto",
         stripMetadata: true,
         audioBitrate: "192k",
+        collisionPolicy: "autorename",
+        maxParallelJobs: 4,
     });
 
     const loadSystemData = async () => {
@@ -57,15 +60,44 @@ export function App() {
         }
     };
 
+    // Load persisted settings and history from local storage
     useEffect(() => {
+        try {
+            const savedSettings = localStorage.getItem("file2file_settings");
+            if (savedSettings) {
+                setSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) }));
+            }
+            const savedHistory = localStorage.getItem("file2file_history");
+            if (savedHistory) {
+                setHistory(JSON.parse(savedHistory).slice(0, 50));
+            }
+        } catch (e) {
+            console.warn("Storage load warning:", e);
+        }
         loadSystemData();
     }, []);
 
+    // Persist settings
+    useEffect(() => {
+        try {
+            localStorage.setItem("file2file_settings", JSON.stringify(settings));
+        } catch {}
+    }, [settings]);
+
+    // Persist history
+    useEffect(() => {
+        try {
+            localStorage.setItem("file2file_history", JSON.stringify(history.slice(0, 50)));
+        } catch {}
+    }, [history]);
+
     const handleAddFiles = async (newFiles: FileItem[]) => {
         if (newFiles.length === 0) return;
-        setFiles([...files, ...newFiles]);
+        setFiles(prev => [...prev, ...newFiles]);
+
         try {
-            const formats = await api.getCompatibleTargets(newFiles[0].extension);
+            const primaryExt = newFiles[0].extension;
+            const formats = await api.getCompatibleTargets(primaryExt);
             setAvailableFormats(formats);
         } catch (err) {
             console.error("Format fetch error:", err);
@@ -77,9 +109,35 @@ export function App() {
         setCurrentStep("convert-box");
     };
 
+    const handleSelectPreset = async (p: QuickPreset) => {
+        // Find representative source extension
+        let sourceExt = "";
+        if (files.length > 0) {
+            const match = files.find(f => f.category === p.from_category) || files[0];
+            sourceExt = match.extension;
+        } else {
+            sourceExt = p.from_category === "document" ? "pdf" :
+                        p.from_category === "image" ? "png" :
+                        p.from_category === "video" ? "mp4" : "mp4";
+        }
+
+        try {
+            const formats = await api.getCompatibleTargets(sourceExt);
+            setAvailableFormats(formats);
+            const target = formats.find(f => f.extension === p.to_format) || formats[0];
+            if (target) {
+                handleSelectFormat(target);
+            }
+        } catch (err) {
+            console.error("Preset format fetch error:", err);
+        }
+    };
+
     const handleUpdateFileStatus = (id: string, status: FileItem["status"], result?: ConversionResult) => {
-        setFiles(prev => prev.map(f => f.id === id ? { ...f, status, result } : f));
-        if (result) setHistory(prev => [result, ...prev]);
+        setFiles(prev => prev.map(f => (f.id === id ? { ...f, status, result } : f)));
+        if (result) {
+            setHistory(prev => [result, ...prev.filter(h => h.job_id !== result.job_id)].slice(0, 50));
+        }
     };
 
     return (
@@ -100,22 +158,21 @@ export function App() {
                         <div className="max-w-4xl space-y-10">
                             <div className="space-y-1.5">
                                 <h1 className="text-[28px] font-semibold text-text-primary tracking-tight">Convert files</h1>
-                                <p className="text-[14px] text-text-secondary">Convert media, documents, images, data, and archives locally.</p>
+                                <p className="text-[14px] text-text-secondary">
+                                    Local, private conversion for video, audio, images, documents, data, and archives.
+                                </p>
                             </div>
 
                             <QuickConverters
                                 presets={presets}
-                                onSelectPreset={async (p) => {
-                                    const formats = await api.getCompatibleTargets(p.to_format);
-                                    setAvailableFormats(formats);
-                                    handleSelectFormat(formats.find((f: FormatOption) => f.extension === p.to_format) || formats[0]);
-                                }}
+                                onSelectPreset={handleSelectPreset}
+                                sidecars={sidecars}
                             />
 
                             <DropZone
                                 files={files}
                                 onAddFiles={handleAddFiles}
-                                onRemoveFile={(id) => setFiles(files.filter(f => f.id !== id))}
+                                onRemoveFile={(id) => setFiles(prev => prev.filter(f => f.id !== id))}
                                 onClearFiles={() => setFiles([])}
                                 onDirectConvert={handleSelectFormat}
                             />
@@ -141,6 +198,7 @@ export function App() {
                                 availableFormats={availableFormats}
                                 onSelectFormat={handleSelectFormat}
                                 onBack={() => setCurrentStep("upload")}
+                                sidecars={sidecars}
                             />
                         </div>
                     )}
@@ -153,7 +211,10 @@ export function App() {
                                 settings={settings}
                                 hardware={hardware}
                                 onBackToFormats={() => setCurrentStep("select-format")}
-                                onResetToUpload={() => { setFiles([]); setCurrentStep("upload"); }}
+                                onResetToUpload={() => {
+                                    setFiles([]);
+                                    setCurrentStep("upload");
+                                }}
                                 onUpdateFileStatus={handleUpdateFileStatus}
                             />
                         </div>
@@ -168,17 +229,25 @@ export function App() {
                             <h3 className="text-tiny uppercase tracking-widest text-text-muted font-bold">System Status</h3>
                             <div className="space-y-3">
                                 <div className="flex items-start gap-3">
-                                    <Shield className="w-3.5 h-3.5 text-success mt-0.5" />
+                                    <Shield className="w-3.5 h-3.5 text-success mt-0.5 shrink-0" />
                                     <div className="space-y-0.5">
-                                        <p className="text-[12px] font-medium text-text-secondary">Local Processing</p>
-                                        <p className="text-tiny text-text-muted leading-tight">All conversions are performed locally. No files leave your device.</p>
+                                        <p className="text-[12px] font-medium text-text-secondary">Local Execution</p>
+                                        <p className="text-tiny text-text-muted leading-tight">
+                                            {isTauri()
+                                                ? "Conversions run on your device using bundled sidecar engines."
+                                                : "Browser processing is performed locally, though some components (like PDF workers) may be fetched from a CDN."}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-3">
-                                    <Database className="w-3.5 h-3.5 text-accent mt-0.5" />
+                                    <Database className="w-3.5 h-3.5 text-accent mt-0.5 shrink-0" />
                                     <div className="space-y-0.5">
-                                        <p className="text-[12px] font-medium text-text-secondary">Hardware Accelerated</p>
-                                        <p className="text-tiny text-text-muted leading-tight">Using {hardware?.recommended_encoder.toUpperCase()} for optimal performance.</p>
+                                        <p className="text-[12px] font-medium text-text-secondary">Acceleration Engine</p>
+                                        <p className="text-tiny text-text-muted leading-tight">
+                                            {hardware?.hardware_acceleration_supported
+                                                ? `Accelerated using ${hardware.recommended_encoder.toUpperCase()}`
+                                                : "Standard software processing (multi-threaded CPU)"}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -196,11 +265,15 @@ export function App() {
                     <div className="h-[40px] border-t border-border px-4 flex items-center justify-between bg-surface-raised shrink-0">
                         <div className="flex gap-4">
                             <span className="text-tiny font-mono text-text-muted">CPU: {hardware?.cpu_cores || 0} Cores</span>
-                            <span className="text-tiny font-mono text-text-muted">MEM: OK</span>
+                            <span className="text-tiny font-mono text-text-muted">
+                                SIDE: {sidecars?.all_ready ? "Ready" : "Partial"}
+                            </span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-success" />
-                            <span className="text-tiny font-medium text-text-muted uppercase tracking-tighter">Connected</span>
+                            <div className={`w-1.5 h-1.5 rounded-full ${sidecars?.all_ready ? "bg-success" : "bg-warning"}`} />
+                            <span className="text-tiny font-medium text-text-muted uppercase tracking-tighter">
+                                {sidecars?.all_ready ? "Operational" : "Limited Mode"}
+                            </span>
                         </div>
                     </div>
                 </aside>

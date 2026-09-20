@@ -18,9 +18,9 @@ const detectCategory = (ext: string): FileCategory => {
     if (["mp3", "wav", "flac", "aac", "ogg", "m4a", "opus", "wma", "aiff"].includes(e)) return "audio";
     if (["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "tiff", "ico", "heic", "tga", "psd"].includes(e)) return "image";
     if (["pdf", "docx", "doc", "md", "html", "txt", "epub", "rtf", "odt"].includes(e)) return "document";
-    if (["svg", "eps", "ai"].includes(e)) return "vector";
-    if (["zip", "tar", "gz", "7z", "rar", "directory"].includes(e)) return "archive";
-    if (["csv", "json", "xlsx", "xls", "yaml", "xml", "toml", "sql"].includes(e)) return "data";
+    if (["svg"].includes(e)) return "vector";
+    if (["zip", "tar", "gz", "tgz", "directory", "folder"].includes(e)) return "archive";
+    if (["csv", "json", "xlsx", "xls", "yaml", "xml", "toml", "sql", "sqlite", "db", "log", "bib", "ics"].includes(e)) return "data";
     return "unknown";
 };
 
@@ -31,7 +31,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
 
     useEffect(() => {
         if (files.length > 0) {
-            api.getSmartSuggestions(files[0].extension).then(setSuggestions);
+            api.getSmartSuggestions(files[0].extension).then(setSuggestions).catch(() => setSuggestions([]));
         } else {
             setSuggestions([]);
         }
@@ -40,7 +40,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
     const processFiles = (raw: FileList | null) => {
         if (!raw) return;
         const items = Array.from(raw).map(f => ({
-            id: Math.random().toString(36).substring(2),
+            id: crypto.randomUUID(),
             path: (f as any).path || f.name,
             name: f.name,
             size: f.size,
@@ -148,12 +148,14 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
                         <button
                             onClick={() => void handleSelectFiles("files")}
                             className="btn-secondary h-[36px]"
+                            aria-label="Choose files"
                         >
                             Choose Files
                         </button>
                         <button
                             onClick={() => void handleSelectFiles("folder")}
                             className="btn-secondary h-[36px]"
+                            aria-label="Choose folder"
                         >
                             Choose Folder
                         </button>

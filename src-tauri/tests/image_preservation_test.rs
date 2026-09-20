@@ -1,7 +1,7 @@
 use file2file_lib::converter::{convert_single_file, ConversionRequest};
 use file2file_lib::sidecar::get_binary_command;
-use std::fs::{self, File};
-use std::path::{Path, PathBuf};
+use std::fs::File;
+use std::path::Path;
 use tempfile::tempdir;
 
 #[tokio::test]
@@ -23,7 +23,7 @@ async fn test_pdf_to_docx_image_preservation() {
         png_path.to_str().unwrap()
     ]).output().await.unwrap();
 
-    // Convert PNG to PDF to ensure it contains a raster image
+    // Convert PNG to PDF using ImageMagick
     let magick_cmd2 = get_binary_command(handle, "magick").await.unwrap();
     let output = magick_cmd2
         .args([
@@ -37,17 +37,8 @@ async fn test_pdf_to_docx_image_preservation() {
     assert!(output.status.success(), "magick failed: {}", String::from_utf8_lossy(&output.stderr));
     assert!(input_path.exists(), "Test PDF was not created");
 
-    let req = ConversionRequest {
-        input_path: input_path.to_str().unwrap().to_string(),
-        output_dir: Some(dir.path().to_str().unwrap().to_string()),
-        target_format: "docx".to_string(),
-        crf: None,
-        resolution: None,
-        hardware_accel: false,
-        selected_encoder: None,
-        strip_metadata: false,
-        audio_bitrate: None,
-    };
+    let mut req = ConversionRequest::new(input_path.to_str().unwrap(), "docx");
+    req.output_dir = Some(dir.path().to_str().unwrap().to_string());
 
     let result = convert_single_file(handle.clone(), req).await.unwrap();
     assert!(result.success, "Conversion failed: {:?}", result.error);
@@ -62,7 +53,6 @@ async fn test_pdf_to_docx_image_preservation() {
     let mut image_found = false;
     for i in 0..archive.len() {
         let file = archive.by_index(i).unwrap();
-        println!("DOCX Entry: {}", file.name());
         if file.name().starts_with("word/media/") {
             image_found = true;
             break;

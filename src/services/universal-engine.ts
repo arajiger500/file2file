@@ -5,13 +5,13 @@ import {
 } from "../types";
 
 /**
- * HIGH-FIDELITY UNIVERSAL ENGINE
- * Handles real binary transformations for 100+ combinations in the browser.
+ * BROWSER FALLBACK ENGINE
+ * Provides limited, truthful local transformations in the browser when Tauri is unavailable.
  */
 export async function handleUniversalEngine<T>(cmd: string, args?: Record<string, any>): Promise<T> {
     if (cmd === "detect_hardware") {
         return {
-            gpu_vendor: "Generic Web Browser",
+            gpu_vendor: "No GPU access (Browser Fallback)",
             hardware_acceleration_supported: false,
             recommended_encoder: "wasm",
             cpu_cores: navigator.hardwareConcurrency || 1,
@@ -27,9 +27,8 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
 
     if (cmd === "get_presets") {
         return [
-            { id: "pre-1", title: "PDF to Word (Editable)", target_name: "Word", from_category: "document", to_format: "docx", description: "Text extraction in browser", badge: "Fast", icon: "file-text" },
-            { id: "pre-2", title: "Image to WebP", target_name: "WebP", from_category: "image", to_format: "webp", description: "Canvas transcoding", badge: "Web", icon: "image" },
-            { id: "pre-5", title: "Image to PDF", target_name: "PDF", from_category: "image", to_format: "pdf", description: "jsPDF wrapper", badge: "Tools", icon: "sparkles" }
+            { id: "pre-1", title: "PDF to Word (Editable)", target_name: "Word", from_category: "document", to_format: "docx", description: "Text extraction (Browser)", badge: "Web", icon: "file-text" },
+            { id: "pre-2", title: "Image to WebP", target_name: "WebP", from_category: "image", to_format: "webp", description: "Canvas (Browser)", badge: "Web", icon: "image" }
         ] as unknown as T;
     }
 
@@ -71,7 +70,7 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
         }
 
         return {
-            job_id: Math.random().toString(36).substring(2),
+            job_id: req.job_id || Math.random().toString(36).substring(2),
             input_path: req.input_path,
             output_path: `file2file_output.${targetExt}`,
             success: true,
@@ -84,12 +83,14 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
 
     if (cmd === "check_sidecars") {
         return {
-            ffmpeg: { available: false, name: "ffmpeg", path_or_sidecar: "browser_mode" },
-            ffprobe: { available: false, name: "ffprobe", path_or_sidecar: "browser_mode" },
-            pandoc: { available: false, name: "pandoc", path_or_sidecar: "browser_mode" },
-            imagemagick: { available: false, name: "magick", path_or_sidecar: "browser_mode" },
-            pdftotext: { available: false, name: "pdftotext", path_or_sidecar: "browser_mode" },
-            pdftohtml: { available: false, name: "pdftohtml", path_or_sidecar: "browser_mode" },
+            binaries: [],
+            categories: [
+                { category: "Video", ready: false, engine: "N/A", message: "Desktop required" },
+                { category: "Audio", ready: false, engine: "N/A", message: "Desktop required" },
+                { category: "Images", ready: true, engine: "Canvas", message: "Basic support" },
+                { category: "Documents", ready: true, engine: "jsPDF/PDF.js", message: "Limited fidelity" },
+                { category: "Data", ready: true, engine: "JS-Logic", message: "Full support" }
+            ],
             all_ready: false
         } as unknown as T;
     }

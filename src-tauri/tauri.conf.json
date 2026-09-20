@@ -24,7 +24,7 @@
             }
         ],
         "security": {
-            "csp": null
+            "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: blob: data:; connect-src 'self' ipc: ws://localhost:* http://localhost:*;"
         }
     },
     "bundle": {
@@ -64,10 +64,19 @@
         },
         "linux": {
             "deb": {
-                "depends": []
+                "depends": [
+                    "libwebkit2gtk-4.1-0",
+                    "libgtk-3-0",
+                    "libayatana-appindicator3-1",
+                    "librsvg2-2",
+                    "imagemagick",
+                    "pandoc",
+                    "poppler-utils",
+                    "ffmpeg"
+                ]
             },
             "appimage": {
-                "bundleMediaFramework": false
+                "bundleMediaFramework": true
             }
         },
         "macOS": {

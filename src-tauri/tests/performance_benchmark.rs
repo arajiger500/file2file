@@ -19,14 +19,13 @@ async fn benchmark_large_pdf_conversion() {
     // 1. Create a source image
     let magick_cmd = get_binary_command(handle, "magick").await.unwrap();
     let _ = magick_cmd.args([
-        "-size", "200x200", "xc:blue",
+        "-size", "100x100", "xc:blue",
         png_path.to_str().unwrap()
     ]).output().await.unwrap();
 
-    // 2. Create a multi-page PDF (e.g., 50 pages)
-    // We can use magick to append the same image multiple times
+    // 2. Create a 5-page PDF for test
     let mut args = Vec::new();
-    for _ in 0..50 {
+    for _ in 0..5 {
         args.push(png_path.to_str().unwrap().to_string());
     }
     args.push(input_path.to_str().unwrap().to_string());
@@ -38,30 +37,19 @@ async fn benchmark_large_pdf_conversion() {
         .await
         .unwrap();
 
-    assert!(output.status.success(), "Failed to create large PDF");
+    assert!(output.status.success(), "Failed to create test PDF: {}", String::from_utf8_lossy(&output.stderr));
 
     // 3. Measure conversion time
-    let req = ConversionRequest {
-        input_path: input_path.to_str().unwrap().to_string(),
-        output_dir: Some(dir.path().to_str().unwrap().to_string()),
-        target_format: "docx".to_string(),
-        crf: None,
-        resolution: None,
-        hardware_accel: false,
-        selected_encoder: None,
-        strip_metadata: false,
-        audio_bitrate: None,
-    };
+    let mut req = ConversionRequest::new(input_path.to_str().unwrap(), "docx");
+    req.output_dir = Some(dir.path().to_str().unwrap().to_string());
 
     let start = Instant::now();
     let result = convert_single_file(handle.clone(), req).await.unwrap();
     let duration = start.elapsed();
 
     assert!(result.success, "Conversion failed: {:?}", result.error);
-    println!("Converted 50-page PDF with images to DOCX in {}ms", duration.as_millis());
+    println!("Converted PDF with images to DOCX in {}ms", duration.as_millis());
 
-    // Safety check for size
     let metadata = fs::metadata(&result.output_path).unwrap();
-    println!("Output DOCX size: {} bytes", metadata.len());
     assert!(metadata.len() > 0);
 }

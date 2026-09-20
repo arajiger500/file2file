@@ -1,1 +1,1 @@
-test data
+[{"id":1,"name":"Alice","active":true,"score":95.5},{"id":2,"name":"Bob","active":false,"score":88.0}]

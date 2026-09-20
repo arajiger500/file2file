@@ -24,6 +24,13 @@ pub struct SidecarHealthReport {
     pub binaries: Vec<BinaryStatus>,
     pub categories: Vec<CategoryStatus>,
     pub all_ready: bool,
+    pub ffmpeg: BinaryStatus,
+    pub ffprobe: BinaryStatus,
+    pub pandoc: BinaryStatus,
+    pub magick: BinaryStatus,
+    pub imagemagick: BinaryStatus,
+    pub pdftotext: BinaryStatus,
+    pub pdftohtml: BinaryStatus,
 }
 
 fn parse_version(output: &str, cmd: &str) -> String {
@@ -262,6 +269,53 @@ pub async fn get_binary_command<R: tauri::Runtime>(
     ))
 }
 
+pub struct CommandOutput {
+    pub success: bool,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+
+pub async fn spawn_and_track_simple<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    state: &crate::AppState,
+    job_id: &str,
+    cmd_name: &str,
+    args: Vec<String>,
+) -> Result<CommandOutput, String> {
+    let mut cmd = get_binary_command(app, cmd_name).await?;
+    cmd = cmd.args(args);
+
+    let (mut rx, child) = cmd.spawn().map_err(|e| format!("Failed to spawn {}: {}", cmd_name, e))?;
+    state.active_jobs.lock().await.insert(job_id.to_string(), child);
+
+    let timeout = std::time::Duration::from_secs(3600);
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut success = false;
+
+    let res = tokio::time::timeout(timeout, async {
+        while let Some(event) = rx.recv().await {
+            match event {
+                tauri_plugin_shell::process::CommandEvent::Stdout(line) => stdout.extend(line),
+                tauri_plugin_shell::process::CommandEvent::Stderr(line) => stderr.extend(line),
+                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                    success = payload.code == Some(0);
+                    break;
+                }
+                _ => {}
+            }
+        }
+    }).await;
+
+    state.active_jobs.lock().await.remove(job_id);
+
+    if res.is_err() {
+         return Err(format!("Process {} timed out", cmd_name));
+    }
+
+    Ok(CommandOutput { success, stdout, stderr })
+}
+
 pub async fn check_sidecar_health<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> SidecarHealthReport {
     let ffmpeg = probe_sidecar(app, "ffmpeg", "-version").await;
     let ffprobe = probe_sidecar(app, "ffprobe", "-version").await;
@@ -324,6 +378,13 @@ pub async fn check_sidecar_health<R: tauri::Runtime>(app: &tauri::AppHandle<R>) 
         binaries,
         categories,
         all_ready,
+        ffmpeg,
+        ffprobe,
+        pandoc,
+        magick: imagemagick.clone(),
+        imagemagick,
+        pdftotext,
+        pdftohtml,
     }
 }
 

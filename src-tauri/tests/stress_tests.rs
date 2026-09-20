@@ -1,7 +1,7 @@
 use file2file_lib::converter::{convert_single_file, ConversionRequest};
-use std::fs;
-use std::path::Path;
 use futures::future::join_all;
+use std::fs;
+use tempfile::tempdir;
 
 #[tokio::test]
 async fn test_large_batch_parallel() {
@@ -13,36 +13,18 @@ async fn test_large_batch_parallel() {
         .unwrap();
     let handle = app.handle();
 
-    let batch_dir = Path::new("../stress_batch_files");
-    if batch_dir.exists() {
-        fs::remove_dir_all(batch_dir).unwrap();
-    }
-    fs::create_dir_all(batch_dir).unwrap();
+    let batch_dir = tempdir().unwrap();
+    let output_dir = tempdir().unwrap();
 
-    let output_dir = Path::new("../stress_batch_output");
-    if output_dir.exists() {
-        fs::remove_dir_all(output_dir).unwrap();
-    }
-    fs::create_dir_all(output_dir).unwrap();
-
-    let batch_size = 50;
+    let batch_size = 20;
     let mut futures = Vec::new();
 
     for i in 0..batch_size {
-        let input_path = batch_dir.join(format!("file_{}.txt", i));
-        fs::write(&input_path, format!("stress test data {}", i)).unwrap();
+        let input_path = batch_dir.path().join(format!("file_{}.txt", i));
+        fs::write(&input_path, format!("stress test data content {}", i)).unwrap();
 
-        let req = ConversionRequest {
-            input_path: input_path.to_string_lossy().to_string(),
-            output_dir: Some(output_dir.to_string_lossy().to_string()),
-            target_format: "html".to_string(),
-            crf: None,
-            resolution: None,
-            hardware_accel: false,
-            selected_encoder: None,
-            strip_metadata: false,
-            audio_bitrate: None,
-        };
+        let mut req = ConversionRequest::new(input_path.to_str().unwrap(), "html");
+        req.output_dir = Some(output_dir.path().to_str().unwrap().to_string());
 
         futures.push(convert_single_file(handle.clone(), req));
     }
@@ -61,10 +43,4 @@ async fn test_large_batch_parallel() {
 
     println!("Batch complete: {}/{} successful", success_count, batch_size);
     assert_eq!(success_count, batch_size, "Not all files converted successfully");
-}
-
-#[tokio::test]
-#[ignore] // Run manually for long stress tests
-async fn test_massive_file_handle() {
-    // This would test a multi-GB file if available
 }

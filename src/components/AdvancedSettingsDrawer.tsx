@@ -126,6 +126,39 @@ export const AdvancedSettingsDrawer: React.FC<AdvancedSettingsDrawerProps> = ({
                                 </select>
                             </div>
                         )}
+
+                        <div className="space-y-3">
+                            <label className="text-[13px] font-medium text-text-secondary">Maximum parallel jobs</label>
+                            <select
+                                value={settings.maxParallelJobs}
+                                onChange={(e) => updateSetting("maxParallelJobs", parseInt(e.target.value))}
+                                className="input-field w-full h-[38px] cursor-pointer"
+                            >
+                                {[1, 2, 4, 8, 16].map((n) => (
+                                    <option key={n} value={n}>{n} concurrent jobs</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="h-[1px] bg-border" />
+
+                    {/* Output Section */}
+                    <div className="space-y-6">
+                        <h3 className="text-tiny font-bold uppercase tracking-widest text-text-muted">File Handling</h3>
+
+                        <div className="space-y-3">
+                            <label className="text-[13px] font-medium text-text-secondary">Collision policy</label>
+                            <select
+                                value={settings.collisionPolicy}
+                                onChange={(e) => updateSetting("collisionPolicy", e.target.value as any)}
+                                className="input-field w-full h-[38px] cursor-pointer"
+                            >
+                                <option value="autorename">Auto-rename (Recommended)</option>
+                                <option value="overwrite">Overwrite existing</option>
+                                <option value="skip">Skip duplicates</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div className="h-[1px] bg-border" />

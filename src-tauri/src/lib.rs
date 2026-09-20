@@ -1,14 +1,35 @@
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
+use tauri::{AppHandle, State};
+use tokio::sync::{Mutex, Semaphore};
+
+pub struct AppState {
+    pub active_jobs: Mutex<HashMap<String, tauri_plugin_shell::process::CommandChild>>,
+    pub conversion_semaphore: Arc<Semaphore>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        let cpu_cores = num_cpus::get();
+        let max_concurrency = std::cmp::min(cpu_cores, 4).max(1);
+        Self {
+            active_jobs: Mutex::new(HashMap::new()),
+            conversion_semaphore: Arc::new(Semaphore::new(max_concurrency)),
+        }
+    }
+}
+
 pub mod converter;
+pub mod errors;
 pub mod formats;
 pub mod hardware;
-pub mod sidecar;
-pub mod errors;
 pub mod registry;
+pub mod sidecar;
 
 mod commands {
     use super::*;
-    use tauri::AppHandle;
-    use converter::{ValidationResult};
+    use converter::ValidationResult;
 
     #[tauri::command]
     pub async fn detect_hardware(app: AppHandle) -> HardwareInfo {
@@ -53,20 +74,43 @@ mod commands {
     }
 
     #[tauri::command]
-    pub fn copy_file(src: String, dest: String) -> Result<(), String> {
-        std::fs::copy(&src, &dest)
-            .map(|_| ())
-            .map_err(|e| format!("Failed to copy file: {}", e))
+    pub async fn cancel_job(
+        state: State<'_, AppState>,
+        job_id: String,
+    ) -> Result<(), String> {
+        let mut jobs = state.active_jobs.lock().await;
+        if let Some(child) = jobs.remove(&job_id) {
+            child.kill().map_err(|e| format!("Failed to kill job: {}", e))?;
+            return Ok(());
+        }
+        Err("Job not found or already completed".to_string())
     }
 
     #[tauri::command]
-    pub fn write_base64_file(path: String, b64: String) -> Result<(), String> {
-        match base64::decode(&b64) {
-            Ok(bytes) => {
-                std::fs::write(&path, &bytes).map_err(|e| format!("Failed to write file: {}", e))
-            }
-            Err(e) => Err(format!("Base64 decode error: {}", e)),
+    pub fn copy_file(src: String, dest: String) -> Result<(), String> {
+        let src_path = Path::new(&src);
+        if !src_path.exists() {
+            return Err("Source file does not exist".to_string());
         }
+        let src_path = src_path.canonicalize().map_err(|e| format!("Source path error: {}", e))?;
+        if !src_path.is_file() {
+            return Err("Source is not a regular file".to_string());
+        }
+
+        if dest.contains("..") || dest.contains("\0") {
+            return Err("Path traversal or null bytes not allowed".to_string());
+        }
+        let dest_path = Path::new(&dest);
+        if dest_path.exists() {
+            return Err("Destination file already exists".to_string());
+        }
+        if let Some(parent) = dest_path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create destination directory: {}", e))?;
+            }
+        }
+        std::fs::copy(&src_path, dest_path).map_err(|e| format!("Failed to copy file: {}", e))?;
+        Ok(())
     }
 }
 
@@ -78,7 +122,9 @@ use sidecar::{check_sidecar_health, SidecarHealthReport};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let context = tauri::generate_context!();
+
     tauri::Builder::default()
+        .manage(AppState::default())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
@@ -90,8 +136,8 @@ pub fn run() {
             commands::check_sidecars,
             commands::validate_job,
             commands::start_conversion,
+            commands::cancel_job,
             commands::copy_file,
-            commands::write_base64_file,
         ])
         .run(context)
         .expect("error while running tauri application");

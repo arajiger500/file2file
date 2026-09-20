@@ -1,17 +1,28 @@
-import React, { useState, useMemo } from "react";
-import { Search, ArrowLeft } from "lucide-react";
-import { FileItem, FormatOption } from "../types";
+import { useState, useMemo } from "react";
+import { Search, ArrowLeft, AlertTriangle } from "lucide-react";
+import { FileItem, FormatOption, SidecarHealthReport } from "../types";
 
 interface FormatSelectionPageProps {
     files: FileItem[];
     availableFormats: FormatOption[];
     onSelectFormat: (format: FormatOption) => void;
     onBack: () => void;
+    sidecars: SidecarHealthReport | null;
 }
 
-export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availableFormats, onSelectFormat, onBack }) => {
+export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availableFormats, onSelectFormat, onBack, sidecars }) => {
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("All");
+
+    const isEngineMissing = (engine: string) => {
+        if (!sidecars) return false;
+        const e = engine.toLowerCase();
+        if (e.includes("ffmpeg") && !sidecars.ffmpeg.available) return true;
+        if (e.includes("imagemagick") && !sidecars.imagemagick.available) return true;
+        if (e.includes("pandoc") && !sidecars.pandoc.available) return true;
+        if (e.includes("poppler") && (!sidecars.pdftotext.available || !sidecars.pdftohtml.available)) return true;
+        return false;
+    };
 
     const categories = useMemo(() => ["All", ...Array.from(new Set(availableFormats.map(f => f.subcategory)))], [availableFormats]);
 
@@ -48,7 +59,7 @@ export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availa
 
             {/* Filter Tabs */}
             <div className="flex items-center gap-1 border-b border-border">
-                {categories.map(c => (
+                {categories.map((c: string) => (
                     <button
                         key={c}
                         onClick={() => setFilter(c)}
@@ -87,7 +98,12 @@ export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availa
                             </div>
 
                             <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-                                <span className="text-tiny font-mono text-text-disabled uppercase">{f.sidecar_engine}</span>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-tiny font-mono text-text-disabled uppercase">{f.sidecar_engine}</span>
+                                    {isEngineMissing(f.sidecar_engine) && (
+                                        <AlertTriangle className="w-3 h-3 text-warning"  />
+                                    )}
+                                </div>
                                 {f.is_recommended && (
                                     <span className="text-tiny text-accent font-medium uppercase tracking-widest">Recommended</span>
                                 )}

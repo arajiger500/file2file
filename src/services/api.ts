@@ -33,23 +33,12 @@ export const api = {
         invokeTauri<ValidationResult>("validate_job", { inputPath, targetFormat }),
     startConversion: (request: ConversionRequest) =>
         invokeTauri<ConversionResult>("start_conversion", { request }),
+    cancelJob: (jobId: string) =>
+        invokeTauri<void>("cancel_job", { jobId }),
+    copyFile: (src: string, dest: string) =>
+        invokeTauri<void>("copy_file", { src, dest }),
     downloadFile: async (result: ConversionResult, fallbackFilename?: string) => {
         const filename = fallbackFilename || result.output_path.split("/").pop() || "file2file_output";
-        if (isTauri() && !result.download_url) {
-            try {
-                // @ts-ignore
-                const { save } = await import("@tauri-apps/plugin-dialog");
-                const savePath = await save({ defaultPath: filename });
-                if (!savePath) return;
-                await invokeTauri<void>("copy_file", { src: result.output_path, dest: savePath });
-                // @ts-ignore
-                const { open } = await import("@tauri-apps/plugin-shell");
-                await open(savePath);
-            } catch (e) {
-                console.error("Save error:", e);
-            }
-            return;
-        }
         if (result.download_url) {
             const a = document.createElement("a");
             a.href = result.download_url;

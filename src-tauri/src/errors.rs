@@ -30,8 +30,21 @@ pub fn map_technical_error(error: &str, _input_path: &str, target_format: &str) 
     }
 
     // ImageMagick specific errors
-    if err_lower.contains("no decode delegate for this image format") {
-        return format!("ImageMagick does not support decoding this specific format on your system.");
+    if err_lower.contains("no decode delegate") {
+        return "ImageMagick is missing the required delegate (decoder) for this format.".to_string();
+    }
+    if err_lower.contains("cache resources exhausted") {
+        return "The image is too large for the current ImageMagick resource limits.".to_string();
+    }
+    if err_lower.contains("failed to read") && err_lower.contains("svg") {
+        return "Failed to parse SVG. It might be malformed or use unsupported features.".to_string();
+    }
+
+    // PDF/Poppler specific
+    if err_lower.contains("command not found") || err_lower.contains("not found") {
+        if err_lower.contains("pdftohtml") || err_lower.contains("pdftotext") {
+            return "Poppler utilities (pdftohtml/pdftotext) are missing from your system.".to_string();
+        }
     }
 
     // Generic fallbacks

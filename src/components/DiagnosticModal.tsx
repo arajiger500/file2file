@@ -67,6 +67,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ isOpen, onClos
                         <BinaryRow status={sidecars.imagemagick} />
                         <BinaryRow status={sidecars.pandoc} />
                         <BinaryRow status={sidecars.pdftotext} />
+                        <BinaryRow status={sidecars.pdftohtml} />
                     </div>
                 </div>
 

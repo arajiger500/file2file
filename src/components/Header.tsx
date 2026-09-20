@@ -35,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                     onClick={onOpenDiagnostics}
                     className="flex items-center gap-2 text-[12px] text-text-secondary hover:text-text-primary transition-colors"
+                    aria-label="Engine health status"
                 >
                     <div className={`w-2 h-2 rounded-full ${sidecars?.all_ready ? "bg-success" : "bg-warning"}`} />
                     <span>Engines: {sidecars?.all_ready ? "Ready" : "Warning"}</span>
@@ -43,6 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                     onClick={onRefreshHardware}
                     className="flex items-center gap-2 text-[12px] text-text-secondary hover:text-text-primary transition-colors"
+                    aria-label="Refresh hardware info"
                 >
                     {hardware?.hardware_acceleration_supported ? (
                         <>

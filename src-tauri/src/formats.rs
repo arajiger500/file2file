@@ -125,11 +125,11 @@ pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
             };
 
             let description = match c.category {
-                FileCategory::Video => format!("Native FFmpeg {} pipeline", c.to_ext.to_uppercase()),
-                FileCategory::Audio => format!("Accurate {} audio master", c.to_ext.to_uppercase()),
-                FileCategory::Image => format!("Pixel-perfect {} encoding", c.to_ext.to_uppercase()),
-                FileCategory::Document => format!("Structural {} conversion", c.to_ext.to_uppercase()),
-                FileCategory::Data => format!("Structured {} transformation", c.to_ext.to_uppercase()),
+                FileCategory::Video => format!("FFmpeg {} video encoding", c.to_ext.to_uppercase()),
+                FileCategory::Audio => format!("FFmpeg {} audio stream export", c.to_ext.to_uppercase()),
+                FileCategory::Image => format!("ImageMagick {} image encoding", c.to_ext.to_uppercase()),
+                FileCategory::Document => format!("Pandoc/Poppler {} document export", c.to_ext.to_uppercase()),
+                FileCategory::Data => format!("Native structured {} serialization", c.to_ext.to_uppercase()),
                 FileCategory::Archive => {
                     if c.to_ext == "folder" {
                         "Extract all files from ZIP".to_string()
@@ -166,7 +166,7 @@ pub fn get_smart_recommendations(input_ext: &str) -> Vec<FormatOption> {
         FileCategory::Video => vec!["mp4", "webm", "mp3", "gif"],
         FileCategory::Audio => vec!["mp3", "wav", "flac", "m4a"],
         FileCategory::Image | FileCategory::Vector => vec!["webp", "png", "jpg", "pdf"],
-        FileCategory::Document => vec!["pdf", "docx", "txt", "html"],
+        FileCategory::Document => vec!["docx", "html", "txt", "md"],
         FileCategory::Data => vec!["json", "csv", "yaml", "xml"],
         FileCategory::Archive => vec!["zip", "folder"],
         _ => vec![],

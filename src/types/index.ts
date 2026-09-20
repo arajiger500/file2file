@@ -22,15 +22,27 @@ export interface BinaryStatus {
     available: boolean;
     version: string | null;
     path_or_sidecar: string;
+    absolute_path?: string | null;
+}
+
+export interface CategoryStatus {
+    category: string;
+    ready: boolean;
+    engine: string;
+    message?: string | null;
 }
 
 export interface SidecarHealthReport {
+    binaries: BinaryStatus[];
+    categories: CategoryStatus[];
+    all_ready: boolean;
     ffmpeg: BinaryStatus;
     ffprobe: BinaryStatus;
     pandoc: BinaryStatus;
+    magick: BinaryStatus;
     imagemagick: BinaryStatus;
     pdftotext: BinaryStatus;
-    all_ready: boolean;
+    pdftohtml: BinaryStatus;
 }
 
 export interface FormatOption {
@@ -66,7 +78,11 @@ export interface AdvancedSettings {
     selectedEncoder: string;
     stripMetadata: boolean;
     audioBitrate: string;
+    collisionPolicy: CollisionPolicy;
+    maxParallelJobs: number;
 }
+
+export type JobStatus = "pending" | "converting" | "completed" | "error" | "cancelled";
 
 export interface FileItem {
     id: string;
@@ -75,13 +91,16 @@ export interface FileItem {
     size: number;
     extension: string;
     category: FileCategory;
-    status: "pending" | "converting" | "completed" | "error";
+    status: JobStatus;
     targetFormat?: string;
     rawFile?: File;
     result?: ConversionResult;
 }
 
+export type CollisionPolicy = "overwrite" | "autorename" | "skip" | "ask";
+
 export interface ConversionRequest {
+    job_id?: string;
     input_path: string;
     output_dir?: string;
     target_format: string;
@@ -91,6 +110,7 @@ export interface ConversionRequest {
     selected_encoder?: string;
     strip_metadata: boolean;
     audio_bitrate?: string;
+    collision_policy?: CollisionPolicy;
     rawFile?: File;
 }
 
