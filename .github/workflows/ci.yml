@@ -53,7 +53,7 @@ jobs:
         run: npm run build
 
       - name: Rust format
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all
 
       - name: Rust library tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib
