@@ -67,7 +67,7 @@ jobs:
         run: |
           test -f package-lock.json
           test -f src-tauri/Cargo.lock
-          node -e "const p=require('./package.json'); if(!/^\\d+\\.\\d+\\.\\d+$/.test(p.version)) throw new Error('Invalid package version: '+p.version); console.log('Releasing File2File v'+p.version)"
+          node -e "const p=require('./package.json'); if(!/^[0-9]+\\.[0-9]+\\.[0-9]+$/.test(p.version)) throw new Error('Invalid package version: '+p.version); console.log('Releasing File2File v'+p.version)"
 
       - name: Frontend build
         run: npm run build
