@@ -1,167 +1,104 @@
-name: "publish"
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
-    permissions:
-      contents: write
+  build-release:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest"
-            args: ""
-          - platform: "macos-13"
-            args: ""
-          - platform: "ubuntu-22.04"
-            args: ""
-          - platform: "windows-latest"
-            args: ""
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            label: linux-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: windows-x64
+          - os: macos-26
+            target: aarch64-apple-darwin
+            label: macos-arm64
+          - os: macos-26-intel
+            target: x86_64-apple-darwin
+            label: macos-x64
 
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: setup node
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: 'npm'
+          cache: npm
 
-      - name: install Rust stable
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Install Linux dependencies
+        if: startsWith(matrix.os, 'ubuntu-')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf desktop-file-utils libglib2.0-bin
+          sudo apt-get install -y             libwebkit2gtk-4.1-dev             libgtk-3-dev             libayatana-appindicator3-dev             librsvg2-dev             patchelf             desktop-file-utils             libglib2.0-bin             file
 
-      - name: install frontend dependencies
+      - name: Install frontend dependencies
         run: npm ci
 
-      - name: setup sidecars
+      - name: Verify manifests
         shell: bash
         run: |
-          mkdir -p src-tauri/binaries
-          
-          safe_cp() {
-            local src=$1
-            local dest="src-tauri/binaries/$2"
-            if [ -z "$src" ] || [ ! -f "$src" ]; then
-              echo "Error: Required binary source for $2 not found. Failing build."
-              exit 1
-            else
-              echo "Copying $src to $dest"
-              cp "$src" "$dest"
-            fi
-            chmod +x "$dest"
-          }
+          test -f package-lock.json
+          test -f src-tauri/Cargo.lock
+          node -e "const p=require('./package.json'); if(p.version!==process.env.GITHUB_REF_NAME.replace(/^v/,'')) { throw new Error('package.json version does not match tag') }"
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
 
-          case "${{ matrix.platform }}" in
-            "ubuntu-22.04")
-              ARCH="x86_64-unknown-linux-gnu"
-              sudo apt-get update && sudo apt-get install -y ffmpeg poppler-utils pandoc imagemagick
-              safe_cp "$(command -v ffmpeg)" "ffmpeg-$ARCH"
-              safe_cp "$(command -v ffprobe)" "ffprobe-$ARCH"
-              safe_cp "$(command -v pandoc)" "pandoc-$ARCH"
-              MAGICK_PATH="$(command -v magick || command -v convert)"
-              safe_cp "$MAGICK_PATH" "magick-$ARCH"
-              safe_cp "$(command -v pdftotext)" "pdftotext-$ARCH"
-              safe_cp "$(command -v pdftohtml)" "pdftohtml-$ARCH"
-              ;;
-              
-            "macos-latest" | "macos-13")
-              ARCH=$(rustc -vV | grep host | awk '{print $2}')
-              brew install ffmpeg poppler pandoc imagemagick
-              safe_cp "$(brew --prefix ffmpeg)/bin/ffmpeg" "ffmpeg-$ARCH"
-              safe_cp "$(brew --prefix ffmpeg)/bin/ffprobe" "ffprobe-$ARCH"
-              safe_cp "$(brew --prefix pandoc)/bin/pandoc" "pandoc-$ARCH"
-              safe_cp "$(brew --prefix imagemagick)/bin/magick" "magick-$ARCH"
-              safe_cp "$(brew --prefix poppler)/bin/pdftotext" "pdftotext-$ARCH"
-              safe_cp "$(brew --prefix poppler)/bin/pdftohtml" "pdftohtml-$ARCH"
-              ;;
-              
-            "windows-latest")
-              ARCH="x86_64-pc-windows-msvc"
-              choco install ffmpeg pandoc imagemagick poppler --no-progress
-              
-              FFMPEG_PATH=$(where ffmpeg | head -n 1)
-              FFPROBE_PATH=$(where ffprobe | head -n 1)
-              PANDOC_PATH=$(where pandoc | head -n 1)
-              MAGICK_PATH=$(where magick | head -n 1)
-              PDFTOTEXT_PATH=$(where pdftotext | head -n 1)
-              PDFTOHTML_PATH=$(where pdftohtml | head -n 1)
-
-              safe_cp "$FFMPEG_PATH" "ffmpeg-$ARCH.exe"
-              safe_cp "$FFPROBE_PATH" "ffprobe-$ARCH.exe"
-              safe_cp "$PANDOC_PATH" "pandoc-$ARCH.exe"
-              safe_cp "$MAGICK_PATH" "magick-$ARCH.exe"
-              safe_cp "$PDFTOTEXT_PATH" "pdftotext-$ARCH.exe"
-              safe_cp "$PDFTOHTML_PATH" "pdftohtml-$ARCH.exe"
-              ;;
-          esac
-
-      - name: validate sidecars
-        shell: bash
-        run: |
-          echo "Sidecar Manifest:"
-          ls -lh src-tauri/binaries/
-          
-          MISSING=0
-          case "${{ matrix.platform }}" in
-            "ubuntu-22.04") SUFFIXES=("-x86_64-unknown-linux-gnu") ;;
-            "macos-latest" | "macos-13")
-              ARCH=$(rustc -vV | grep host | awk '{print $2}')
-              SUFFIXES=("-$ARCH")
-              ;;
-            "windows-latest") SUFFIXES=("-x86_64-pc-windows-msvc.exe") ;;
-          esac
-          
-          for sfx in "${SUFFIXES[@]}"; do
-            for bin in ffmpeg ffprobe pandoc magick pdftotext pdftohtml; do
-              if [ ! -f "src-tauri/binaries/$bin$sfx" ]; then
-                echo "Error: Missing required sidecar $bin$sfx"
-                MISSING=1
-              fi
-            done
-          done
-          
-          [ $MISSING -eq 0 ] || exit 1
-
-
-      - name: smoke test sidecars
-        shell: bash
-        run: |
-          for bin in src-tauri/binaries/*; do
-            if [ -f "$bin" ]; then
-              echo "Testing $bin"
-              chmod +x "$bin"
-              "$bin" -version || "$bin" --version || echo "Failed to get version for $bin"
-            fi
-          done
-
-      - name: build frontend
+      - name: Frontend build
         run: npm run build
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Rust format check
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+      - name: Rust library tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+      - name: Build Tauri release
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__
-          releaseName: "App v__VERSION__"
-          releaseBody: "File2File Release Build"
-          releaseDraft: true
+          projectPath: .
+          args: --target ${{ matrix.target }}
+          tagName: v__VERSION__
+          releaseName: File2File v__VERSION__
+          releaseBody: |
+            File2File v__VERSION__
+
+            Native desktop packages:
+            - Windows x64: NSIS + MSI
+            - macOS arm64: DMG
+            - macOS x64: DMG
+            - Linux x64: AppImage + DEB
+
+            Converter engines are discovered locally. See the README for engine requirements.
+          releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
+          generateReleaseNotes: true
+          uploadWorkflowArtifacts: true
+          releaseAssetNamePattern: File2File-[version]-[platform]-[arch]-[bundle][ext]
