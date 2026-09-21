@@ -22,6 +22,9 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
     onResetToUpload,
     onUpdateFileStatus,
 }) => {
+    const runningRef = useRef(false);
+    const [operationError, setOperationError] = useState<string | null>(null);
+    const [isCancelling, setIsCancelling] = useState(false);
     const [isConverting, setIsConverting] = useState(false);
     const [results, setResults] = useState<ConversionResult[]>([]);
     const [startTime, setStartTime] = useState<number | null>(null);
@@ -30,6 +33,12 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
 
     const activeJobIdsRef = useRef<Set<string>>(new Set());
     const isCancelledRef = useRef<boolean>(false);
+    const blobUrlsRef = useRef<Set<string>>(new Set());
+
+    useEffect(() => () => {
+        blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+        blobUrlsRef.current.clear();
+    }, []);
 
     // Live elapsed timer
     useEffect(() => {
@@ -46,7 +55,11 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
     const progress = files.length > 0 ? (completedCount / files.length) * 100 : 0;
 
     const runBatch = async (filesToProcess: FileItem[]) => {
-        if (filesToProcess.length === 0) return;
+        if (filesToProcess.length === 0 || runningRef.current) return;
+        runningRef.current = true;
+        setIsCancelling(false);
+        setOperationError(null);
+        filesToProcess.forEach(file => onUpdateFileStatus(file.id, "pending"));
 
         setIsConverting(true);
         isCancelledRef.current = false;
@@ -75,17 +88,26 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                 } else {
                     validatedQueue.push(file);
                 }
-            } catch {
-                validatedQueue.push(file);
+            } catch (error) {
+                const fail: ConversionResult = {
+                    job_id: crypto.randomUUID(), input_path: file.path, output_path: "",
+                    success: false, original_size_bytes: file.size, converted_size_bytes: 0,
+                    elapsed_ms: 0, error: `Validation could not run: ${String(error)}`,
+                };
+                onUpdateFileStatus(file.id, "error", fail);
+                setResults(prev => [...prev.filter(result => result.input_path !== file.path), fail]);
             }
         }
 
         if (validatedQueue.length === 0 || isCancelledRef.current) {
             setIsConverting(false);
+            runningRef.current = false;
+            setIsCancelling(false);
+            if (isCancelledRef.current) filesToProcess.forEach(f => onUpdateFileStatus(f.id, "cancelled"));
             return;
         }
 
-        const concurrencyLimit = Math.min(settings.maxParallelJobs || 4, 4);
+        const concurrencyLimit = Math.max(1, Math.min(Math.floor(Number(settings.maxParallelJobs)) || 4, 4));
         let nextIndex = 0;
 
         const processFile = async (file: FileItem): Promise<ConversionResult> => {
@@ -116,13 +138,14 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                     crf: settings.crf,
                     resolution: settings.resolution,
                     hardware_accel: settings.hardwareAccel,
-                    selected_encoder: settings.selectedEncoder,
+                    selected_encoder: settings.selectedEncoder === "auto" ? hardware?.recommended_encoder : settings.selectedEncoder,
                     strip_metadata: settings.stripMetadata,
                     audio_bitrate: settings.audioBitrate,
                     collision_policy: settings.collisionPolicy,
                     rawFile: file.rawFile,
                 });
-                onUpdateFileStatus(file.id, res.success ? "completed" : "error", res);
+                if (res.download_url) blobUrlsRef.current.add(res.download_url);
+                onUpdateFileStatus(file.id, res.success ? "completed" : res.error?.toLowerCase().includes("cancelled") ? "cancelled" : "error", res);
                 return res;
             } catch (err) {
                 const fail: ConversionResult = {
@@ -135,7 +158,7 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                     elapsed_ms: 0,
                     error: String(err),
                 };
-                onUpdateFileStatus(file.id, "error", fail);
+                onUpdateFileStatus(file.id, String(err).toLowerCase().includes("cancelled") ? "cancelled" : "error", fail);
                 return fail;
             } finally {
                 activeJobIdsRef.current.delete(jobId);
@@ -153,26 +176,29 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
         });
 
         await Promise.all(workers);
+        if (isCancelledRef.current) validatedQueue.slice(nextIndex).forEach(f => onUpdateFileStatus(f.id, "cancelled"));
+        runningRef.current = false;
+        setIsCancelling(false);
         setIsConverting(false);
         setActiveWorkerCount(0);
     };
 
     const handleRun = () => {
+        if (runningRef.current) return;
+        blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+        blobUrlsRef.current.clear();
         setResults([]);
-        runBatch(files);
+        void runBatch(files);
     };
 
     const handleCancel = async () => {
         isCancelledRef.current = true;
+        setIsCancelling(true);
         const activeIds = Array.from(activeJobIdsRef.current);
-        await Promise.all(activeIds.map(id => api.cancelJob(id).catch(() => {})));
-        files.forEach(f => {
-            if (f.status === "pending" || f.status === "converting") {
-                onUpdateFileStatus(f.id, "cancelled");
-            }
-        });
-        setIsConverting(false);
-        setActiveWorkerCount(0);
+        const cancellations = await Promise.allSettled(activeIds.map(id => api.cancelJob(id)));
+        const failure = cancellations.find(result => result.status === "rejected");
+        if (failure?.status === "rejected") setOperationError("Some jobs already finished or could not be cancelled. Waiting for their final result.");
+        // Keep the batch locked until all workers acknowledge completion.
     };
 
     const handleRetryFailed = () => {
@@ -182,41 +208,12 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
         }
     };
 
-    const handleExportAll = async () => {
-        if (!isTauri()) return;
-        try {
-            const { open } = await import("@tauri-apps/plugin-dialog");
-            const selectedDir = await open({
-                directory: true,
-                multiple: false,
-                title: "Select Output Directory",
-            });
-
-            if (selectedDir && typeof selectedDir === "string") {
-                const successfulResults = results.filter(r => r.success && r.output_path);
-                for (const res of successfulResults) {
-                    const filename = res.output_path.split(/[\\/]/).pop();
-                    if (filename) {
-                        const dest = `${selectedDir}/${filename}`;
-                        await api.copyFile(res.output_path, dest);
-                    }
-                }
-                const { open: openShell } = await import("@tauri-apps/plugin-shell");
-                await openShell(selectedDir);
-            }
-        } catch (err) {
-            console.error("Export all error:", err);
-        }
-    };
-
     const handleShowInFolder = async (filePath: string) => {
         if (!isTauri() || !filePath) return;
         try {
-            const parentDir = filePath.replace(/[\\/][^\\/]+$/, "");
-            const { open } = await import("@tauri-apps/plugin-shell");
-            await open(parentDir);
+            await api.showInFolder(filePath);
         } catch (err) {
-            console.error("Open folder error:", err);
+            setOperationError(`Cannot open output folder: ${String(err)}`);
         }
     };
 
@@ -241,6 +238,8 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
 
     return (
         <div className="h-full flex flex-col gap-6">
+            {operationError && <p role="alert" className="text-error">{operationError}</p>}
+            {isCancelling && <p role="status">Cancelling — waiting for active jobs to stop…</p>}
             {/* Header / Nav */}
             <div className="flex items-center justify-between">
                 <button
@@ -262,7 +261,8 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                             </div>
                             <button
                                 onClick={handleCancel}
-                                className="btn-secondary h-[32px] px-3 text-[12px] text-error border-error/30 hover:bg-error/10 flex items-center gap-1.5"
+                                disabled={isCancelling}
+                                className="btn-secondary h-[32px] px-3 text-[12px] text-error border-error/30 hover:bg-error/10 flex items-center gap-1.5 disabled:opacity-50"
                             >
                                 <StopCircle className="w-3.5 h-3.5" />
                                 <span>Cancel</span>
@@ -366,9 +366,6 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                                         </button>
                                     )}
                                     <button onClick={onResetToUpload} className="btn-secondary">New conversion</button>
-                                    {isTauri() && (
-                                        <button onClick={handleExportAll} className="btn-primary">Export All</button>
-                                    )}
                                 </div>
                             </div>
 

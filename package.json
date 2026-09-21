@@ -1,7 +1,7 @@
 {
     "name": "file2file",
     "private": true,
-    "version": "0.2.0",
+    "version": "0.2.1",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -12,10 +12,8 @@
     "dependencies": {
         "@tauri-apps/api": "^2.0.0",
         "@tauri-apps/plugin-dialog": "^2.0.0",
-        "@tauri-apps/plugin-fs": "^2.0.0",
-        "@tauri-apps/plugin-shell": "^2.0.0",
         "clsx": "^2.1.1",
-        "jspdf": "^2.5.1",
+        "jspdf": "^4.2.1",
         "jszip": "^3.10.1",
         "lucide-react": "^0.475.0",
         "pdfjs-dist": "^6.3.289",

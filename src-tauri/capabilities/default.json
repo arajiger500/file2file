@@ -7,13 +7,6 @@
     ],
     "permissions": [
         "core:default",
-        "shell:default",
-        "shell:allow-open",
-        "dialog:default",
-        "dialog:allow-open",
-        "dialog:allow-save",
-        "fs:default",
-        "fs:allow-read-dir",
-        "fs:allow-stat"
+        "dialog:allow-open"
     ]
 }

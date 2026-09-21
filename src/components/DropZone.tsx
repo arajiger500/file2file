@@ -25,6 +25,11 @@ const detectCategory = (ext: string): FileCategory => {
 };
 
 export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveFile, onClearFiles, onDirectConvert }) => {
+    const [scanError, setScanError] = useState<string | null>(null);
+    const [isScanning, setIsScanning] = useState(false);
+    const scanningRef = useRef(false);
+    const addFilesRef = useRef(onAddFiles);
+    addFilesRef.current = onAddFiles;
     const [isDragging, setIsDragging] = useState(false);
     const [suggestions, setSuggestions] = useState<FormatOption[]>([]);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -39,7 +44,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
 
     const processFiles = (raw: FileList | null) => {
         if (!raw) return;
-        const items = Array.from(raw).map(f => ({
+        const items = Array.from(raw).slice(0, 256).map(f => ({
             id: crypto.randomUUID(),
             path: (f as any).path || f.name,
             name: f.name,
@@ -53,42 +58,24 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
     };
 
     const processPaths = async (paths: string[]) => {
-        const { stat, readDir } = await import("@tauri-apps/plugin-fs");
-
-        const allFiles: FileItem[] = [];
-
-        const scan = async (path: string) => {
-            const metadata = await stat(path);
-            if (metadata.isDirectory) {
-                const entries = await readDir(path);
-                for (const entry of entries) {
-                    await scan(`${path}/${entry.name}`);
-                }
-            } else {
-                const name = path.split(/[\\/]/).pop() || path;
-                const extension = name.split(".").pop() || "";
-                allFiles.push({
-                    id: crypto.randomUUID(),
-                    path,
-                    name,
-                    size: metadata.size,
-                    extension,
-                    category: detectCategory(extension),
-                    status: "pending" as const,
-                });
-            }
-        };
-
-        for (const path of paths) {
-            await scan(path);
-        }
-
-        onAddFiles(allFiles);
+        if (scanningRef.current) return;
+        scanningRef.current = true;
+        setIsScanning(true);
+        setScanError(null);
+        try {
+            const scanned = await api.scanInputs(paths);
+            addFilesRef.current(scanned.map(file => {
+                const extension = file.is_directory ? "folder" : file.name.split(".").pop()?.toLowerCase() || "";
+                return { ...file, id: crypto.randomUUID(), extension, category: detectCategory(extension), status: "pending" as const };
+            }));
+        } catch (error) { setScanError(String(error)); }
+        finally { scanningRef.current = false; setIsScanning(false); }
     };
 
     useEffect(() => {
         if (!isTauri()) return;
 
+        let disposed = false;
         let unlisten: (() => void) | undefined;
         void import("@tauri-apps/api/window").then(({ getCurrentWindow }) =>
             getCurrentWindow().onDragDropEvent((event) => {
@@ -100,10 +87,10 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
                 } else {
                     setIsDragging(false);
                 }
-            }).then((stop) => { unlisten = stop; })
+            }).then((stop) => { if (disposed) stop(); else unlisten = stop; })
         );
 
-        return () => unlisten?.();
+        return () => { disposed = true; unlisten?.(); };
     }, []);
 
     const handleSelectFiles = async (type: "files" | "folder") => {
@@ -146,14 +133,16 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
                     </div>
                     <div className="flex gap-2 mt-2">
                         <button
-                            onClick={() => void handleSelectFiles("files")}
+                            disabled={isScanning}
+                            onClick={() => void handleSelectFiles("files").catch(e => setScanError(String(e)))}
                             className="btn-secondary h-[36px]"
                             aria-label="Choose files"
                         >
                             Choose Files
                         </button>
                         <button
-                            onClick={() => void handleSelectFiles("folder")}
+                            disabled={isScanning}
+                            onClick={() => void handleSelectFiles("folder").catch(e => setScanError(String(e)))}
                             className="btn-secondary h-[36px]"
                             aria-label="Choose folder"
                         >
@@ -163,6 +152,8 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
                 </div>
             </div>
 
+            {scanError && <p role="alert" className="text-error">{scanError}</p>}
+            {isScanning && <p role="status">Reading selected files…</p>}
             {files.length > 0 && (
                 <div className="space-y-6">
                     <div className="flex items-center justify-between">

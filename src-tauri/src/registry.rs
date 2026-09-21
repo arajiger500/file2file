@@ -144,8 +144,7 @@ impl Registry {
 
         // --- IMAGE / VECTOR ---
         let image_exts = [
-            "png", "jpg", "jpeg", "webp", "bmp", "tiff", "ico", "tga", "psd", "svg", "raw", "cr2",
-            "nef", "arw", "dng",
+            "png", "jpg", "jpeg", "webp", "bmp", "tiff", "ico", "tga", "psd", "svg",
         ];
         let image_targets = ["webp", "png", "jpg", "ico", "bmp", "tiff", "tga", "pdf"];
         for &from in &image_exts {
@@ -161,12 +160,8 @@ impl Registry {
                 }
 
                 let is_raw = ["raw", "cr2", "nef", "arw", "dng"].contains(&from);
-                let engine = if is_raw {
-                    ConversionEngine::FFmpeg
-                } else {
-                    ConversionEngine::ImageMagick
-                };
-                let sidecar = if is_raw { "ffmpeg" } else { "magick" };
+                let engine = ConversionEngine::ImageMagick;
+                let sidecar = "magick";
 
                 let lossless = ["png", "bmp", "tiff"].contains(&to);
                 let is_vector = from == "svg";
@@ -214,9 +209,7 @@ impl Registry {
         }
 
         // --- DOCUMENTS ---
-        let doc_exts = [
-            "pdf", "docx", "doc", "md", "html", "txt", "epub", "rtf", "odt",
-        ];
+        let doc_exts = ["pdf", "docx", "md", "html", "txt", "epub", "rtf", "odt"];
         // Target format does NOT include pdf for Pandoc conversions because pandoc requires LaTeX/typst.
         let doc_targets = ["docx", "md", "html", "txt", "rtf", "epub", "odt"];
         for &from in &doc_exts {
@@ -269,8 +262,7 @@ impl Registry {
 
         // --- DATA ---
         let data_exts = [
-            "csv", "json", "xlsx", "xls", "yaml", "xml", "toml", "sql", "sqlite", "db", "bib",
-            "ics", "log",
+            "csv", "json", "xlsx", "yaml", "xml", "toml", "sqlite", "db", "bib", "ics", "log",
         ];
         let data_targets = ["json", "csv", "yaml", "toml", "xml", "xlsx", "sql"];
         for &from in &data_exts {
@@ -294,7 +286,7 @@ impl Registry {
                     engine: ConversionEngine::RustNative,
                     sidecar_requirement: None,
                     subcategory: "Data Transformation".to_string(),
-                    is_lossless: true,
+                    is_lossless: false,
                     recommended_for: vec!["Analysis".to_string(), "Interoperability".to_string()],
                     fidelity_note: None,
                     limitations: vec![],

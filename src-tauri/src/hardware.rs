@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncoderProfile {
@@ -54,27 +53,25 @@ pub async fn detect_hardware_capabilities(app: Option<tauri::AppHandle>) -> Hard
 
     // Try querying ffmpeg encoders if available on PATH or sidecar
     let ffmpeg_output = if let Some(app) = app {
-        if let Ok(cmd) = get_binary_command(&app, "ffmpeg").await {
-            cmd.args(["-encoders"]).output().await
+        if let Ok(mut cmd) = get_binary_command(&app, "ffmpeg").await {
+            cmd.args(["-encoders"]);
+            crate::process::run(cmd, std::time::Duration::from_secs(5), 1024 * 1024, None)
+                .await
                 .ok()
-                .and_then(|out| String::from_utf8(out.stdout).ok())
+                .filter(|out| out.success)
+                .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
                 .unwrap_or_default()
         } else {
             String::new()
         }
     } else {
-        Command::new("ffmpeg")
-            .arg("-encoders")
-            .output()
-            .ok()
-            .and_then(|out| String::from_utf8(out.stdout).ok())
-            .unwrap_or_default()
+        String::new()
     };
 
-    let has_nvenc = ffmpeg_output.contains("nvenc") || gpu_vendor.as_deref() == Some("NVIDIA");
+    let has_nvenc = ffmpeg_output.contains("nvenc");
     let has_qsv = ffmpeg_output.contains("qsv");
-    let has_amf = ffmpeg_output.contains("amf") || ffmpeg_output.contains("vaapi");
-    let has_videotoolbox = ffmpeg_output.contains("videotoolbox") || cfg!(target_os = "macos");
+    let has_amf = ffmpeg_output.contains("h264_vaapi");
+    let has_videotoolbox = ffmpeg_output.contains("videotoolbox");
 
     if has_nvenc {
         gpu_vendor = Some("NVIDIA".to_string());
@@ -150,8 +147,8 @@ pub async fn detect_hardware_capabilities(app: Option<tauri::AppHandle>) -> Hard
     let hw_supported = available_encoders.iter().any(|e| e.is_hardware);
     let recommended_encoder = available_encoders
         .iter()
-        .find(|e| e.is_hardware)
-        .map(|e| e.id.clone())
+        .find(|encoder| encoder.is_hardware)
+        .map(|encoder| encoder.id.clone())
         .unwrap_or_else(|| "libx264".to_string());
 
     HardwareInfo {

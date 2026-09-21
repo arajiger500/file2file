@@ -4,9 +4,10 @@ use std::io::Read;
 use tempfile::tempdir;
 
 #[tokio::test]
+#[ignore = "requires Pandoc"]
 async fn test_html_to_docx_table_preservation() {
     let app = tauri::test::mock_builder()
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .build(tauri::generate_context!())
         .unwrap();
     let handle = app.handle();
@@ -30,14 +31,25 @@ async fn test_html_to_docx_table_preservation() {
     req_docx.output_dir = Some(dir.path().to_str().unwrap().to_string());
 
     let result = convert_single_file(handle.clone(), req_docx).await.unwrap();
-    assert!(result.success, "HTML to DOCX conversion failed: {:?}", result.error);
+    assert!(
+        result.success,
+        "HTML to DOCX conversion failed: {:?}",
+        result.error
+    );
 
     // Verify table in DOCX by checking XML content
     let file = File::open(&result.output_path).unwrap();
     let mut archive = zip::ZipArchive::new(file).unwrap();
     let mut document_xml = String::new();
-    archive.by_name("word/document.xml").unwrap().read_to_string(&mut document_xml).unwrap();
+    archive
+        .by_name("word/document.xml")
+        .unwrap()
+        .read_to_string(&mut document_xml)
+        .unwrap();
 
     assert!(document_xml.contains("<w:tbl>"), "No table found in DOCX");
-    assert!(document_xml.contains("Cell 1-1"), "Table content lost in DOCX");
+    assert!(
+        document_xml.contains("Cell 1-1"),
+        "Table content lost in DOCX"
+    );
 }

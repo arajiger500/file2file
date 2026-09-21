@@ -2,13 +2,11 @@ name: Release
 
 on:
   push:
-    branches:
-      - "release"
     tags:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -22,34 +20,39 @@ jobs:
         include:
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            label: linux-x64
+            bundles: deb,appimage
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            label: windows-x64
+            bundles: nsis,msi
           - os: macos-26
             target: aarch64-apple-darwin
-            label: macos-arm64
+            bundles: dmg
           - os: macos-26-intel
             target: x86_64-apple-darwin
-            label: macos-x64
+            bundles: dmg
 
     runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_TARGET: ${{ matrix.target }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: lts/*
+          node-version: '24'
           cache: npm
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          components: rustfmt
 
       - name: Rust cache
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: "./src-tauri -> target"
 
@@ -62,42 +65,87 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Verify manifests
-        run: |
-          test -f package-lock.json
-          test -f src-tauri/Cargo.lock
-          node -e "const p=require('./package.json'); if(!/^\\d+\\.\\d+\\.\\d+$/.test(p.version)) throw new Error('Invalid package version: '+p.version); console.log('Releasing File2File v'+p.version)"
+      - name: Verify manifests and native architecture
+        run: node scripts/verify-release.mjs
 
       - name: Frontend build
         run: npm run build
 
       - name: Rust format
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 
       - name: Rust library tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib --test native_safety
 
-      - name: Build Tauri release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build native installers
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         with:
-          projectPath: .
-          args: --target ${{ matrix.target }}
-          tagName: v__VERSION__
-          releaseName: File2File v__VERSION__
-          releaseBody: |
-            File2File v__VERSION__
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} -- --locked
+      - run: node scripts/verify-release.mjs --artifacts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: packages-${{ matrix.target }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
 
-            Native desktop packages:
-            - Windows x64: NSIS + MSI
-            - macOS arm64: DMG
-            - macOS x64: DMG
-            - Linux x64: AppImage + DEB
-
-            Converter engines are discovered locally. See the README for engine requirements.
-          releaseDraft: false
-          prerelease: false
-          generateReleaseNotes: true
-          uploadWorkflowArtifacts: true
-          releaseAssetNamePattern: File2File-[version]-[platform]-[arch]-[bundle][ext]
+  draft-release:
+    needs: build-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093b # v4
+        with:
+          pattern: packages-*
+          path: packages
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const crypto = require('node:crypto');
+            const tag = context.ref.slice('refs/tags/'.length);
+            const packages = [];
+            for (const group of fs.readdirSync('packages')) {
+              for (const file of fs.readdirSync(path.join('packages', group), { recursive: true })) {
+                if (!/\.(deb|AppImage|dmg|msi|exe)$/.test(file)) continue;
+                const full = path.join('packages', group, file);
+                if (!fs.statSync(full).isFile()) continue;
+                packages.push({ name: group.slice('packages-'.length) + '-' + path.basename(file), data: fs.readFileSync(full) });
+              }
+            }
+            if (packages.length !== 6) throw new Error('Expected six installers from four native builds; found ' + packages.length);
+            const checksums = packages.map(p => crypto.createHash('sha256').update(p.data).digest('hex') + '  ' + p.name).join('\n') + '\n';
+            const releaseOptions = {
+              ...context.repo, tag_name: tag, name: 'File2File ' + tag,
+              target_commitish: context.sha, draft: true,
+              body: 'External engines are not bundled. Install and smoke-test each native package before publishing this draft. See README.md. Packages are unsigned unless signing is configured separately.'
+            };
+            let release;
+            try {
+              release = await github.rest.repos.getReleaseByTag({ ...context.repo, tag });
+              if (!release.data.draft) throw new Error('Refusing to replace assets on an already-published release');
+              release = await github.rest.repos.updateRelease({
+                ...releaseOptions, release_id: release.data.id
+              });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              release = await github.rest.repos.createRelease({
+                ...releaseOptions, generate_release_notes: true
+              });
+            }
+            const existingAssets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              ...context.repo, release_id: release.data.id, per_page: 100
+            });
+            for (const existing of existingAssets) {
+              await github.rest.repos.deleteReleaseAsset({ ...context.repo, asset_id: existing.id });
+            }
+            for (const asset of [...packages, { name: 'SHA256SUMS.txt', data: Buffer.from(checksums) }]) {
+              await github.rest.repos.uploadReleaseAsset({ ...context.repo, release_id: release.data.id, ...asset });
+            }

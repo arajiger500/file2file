@@ -3,13 +3,12 @@ use crate::formats::{get_category_for_extension, FileCategory};
 use crate::registry::Registry;
 use crate::sidecar::{get_binary_command, spawn_and_track_simple};
 use calamine::{Reader, Xlsx};
-use flate2::read::GzDecoder;
 use rusqlite::Connection;
 use rust_xlsxwriter::Workbook;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, File};
-use std::io::{self, BufReader, Read};
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri::Manager;
@@ -92,22 +91,31 @@ pub async fn probe_file_info<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     path: &str,
 ) -> Result<FileProbeResult, String> {
-    let output = get_binary_command(app, "ffprobe")
-        .await?
-        .args([
-            "-v",
-            "quiet",
-            "-print_format",
-            "json",
-            "-show_format",
-            "-show_streams",
-            path,
-        ])
-        .output()
-        .await
-        .map_err(|e| format!("ffprobe execution error: {}", e))?;
-
-    if !output.status.success() {
+    let path = Path::new(path).canonicalize().map_err(|e| e.to_string())?;
+    if !path.is_file() {
+        return Err("Input must be a regular file".into());
+    }
+    let mut command = get_binary_command(app, "ffprobe").await?;
+    command.args([
+        "-v",
+        "error",
+        "-protocol_whitelist",
+        "file,pipe",
+        "-print_format",
+        "json",
+        "-show_format",
+        "-show_streams",
+        "-i",
+    ]);
+    command.arg(path);
+    let output = crate::process::run(
+        command,
+        std::time::Duration::from_secs(15),
+        4 * 1024 * 1024,
+        None,
+    )
+    .await?;
+    if !output.success {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
@@ -159,11 +167,14 @@ pub async fn validate_conversion<R: tauri::Runtime>(
         };
     }
 
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
+    let ext = if path.is_dir() {
+        "folder".to_string()
+    } else {
+        path.extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase()
+    };
 
     if !Registry::is_supported(&ext, target_format) {
         return ValidationResult {
@@ -180,7 +191,7 @@ pub async fn validate_conversion<R: tauri::Runtime>(
     let category = get_category_for_extension(&ext);
     let target_cat = get_category_for_extension(target_format);
 
-    let mut warnings = Vec::new();
+    let warnings = Vec::new();
 
     // Probe media files
     if category == FileCategory::Video || category == FileCategory::Audio {
@@ -200,9 +211,12 @@ pub async fn validate_conversion<R: tauri::Runtime>(
                 }
 
                 if target_cat == FileCategory::Video && !info.has_video {
-                    warnings.push(
-                        "Input has no video stream. Output will contain audio only.".to_string(),
-                    );
+                    return ValidationResult {
+                        is_valid: false,
+                        warnings: vec![],
+                        error: Some("The input contains no video stream.".to_string()),
+                        file_info: Some(info),
+                    };
                 }
 
                 return ValidationResult {
@@ -213,7 +227,12 @@ pub async fn validate_conversion<R: tauri::Runtime>(
                 };
             }
             Err(e) => {
-                warnings.push(format!("Could not probe media stream details: {}", e));
+                return ValidationResult {
+                    is_valid: false,
+                    warnings,
+                    error: Some(format!("Media validation failed: {e}")),
+                    file_info: None,
+                };
             }
         }
     }
@@ -263,20 +282,19 @@ pub async fn convert_single_file<R: tauri::Runtime>(
         .clone()
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    // Resolve app state (managed in runtime, or fallback)
-    let state_holder = app.try_state::<crate::AppState>();
-    let default_state = crate::AppState::default();
-    let state = match &state_holder {
-        Some(s) => s.inner(),
-        None => &default_state,
+    if app.try_state::<crate::AppState>().is_none() {
+        app.manage(crate::AppState::default());
+    }
+    let state_holder = app.state::<crate::AppState>();
+    let state = state_holder.inner();
+    let _job = state.register(&job_id)?;
+    let mut cancellation = state.subscribe(&job_id)?;
+    let _permit = tokio::select! {
+        biased;
+        _ = crate::process::cancelled(&mut cancellation) => return Err("Conversion cancelled".into()),
+        permit = state.conversion_semaphore.acquire() => permit.map_err(|e| e.to_string())?,
     };
-
-    // Acquire permit from semaphore to limit concurrent conversions
-    let _permit = state
-        .conversion_semaphore
-        .acquire()
-        .await
-        .map_err(|e| format!("Concurrency semaphore error: {}", e))?;
+    state.check(&job_id)?;
 
     let stem = if is_dir {
         input_path
@@ -294,6 +312,7 @@ pub async fn convert_single_file<R: tauri::Runtime>(
 
     let safe_stem = stem
         .chars()
+        .take(60)
         .map(|c| {
             if c.is_alphanumeric() || c == '_' || c == '-' {
                 c
@@ -324,66 +343,20 @@ pub async fn convert_single_file<R: tauri::Runtime>(
             .to_path_buf(),
     };
 
-    let mut output_filename = if target_ext == "folder" {
-        format!("{}_extracted", safe_stem)
-    } else {
-        format!("{}_converted.{}", safe_stem, target_ext)
-    };
-    let mut output_path = out_dir.join(&output_filename);
-
-    // 2. Collision Handling
-    if output_path.exists() {
-        let policy = req
-            .collision_policy
-            .clone()
-            .unwrap_or(CollisionPolicy::AutoRename);
-        match policy {
-            CollisionPolicy::Skip => {
-                return Ok(ConversionResult {
-                    job_id,
-                    input_path: req.input_path.clone(),
-                    output_path: output_path.to_string_lossy().to_string(),
-                    success: true,
-                    original_size_bytes: 0,
-                    converted_size_bytes: std::fs::metadata(&output_path)
-                        .map(|m| m.len())
-                        .unwrap_or(0),
-                    elapsed_ms: 0,
-                    error: None,
-                    warnings: vec!["File already exists, skipped.".to_string()],
-                });
-            }
-            CollisionPolicy::AutoRename => {
-                let mut counter = 1;
-                while output_path.exists() {
-                    output_filename = if target_ext == "folder" {
-                        format!("{}_extracted_{}", safe_stem, counter)
-                    } else {
-                        format!("{}_converted_{}.{}", safe_stem, counter, target_ext)
-                    };
-                    output_path = out_dir.join(&output_filename);
-                    counter += 1;
-                }
-            }
-            CollisionPolicy::Overwrite => {
-                if output_path == input_path {
-                    return Err(
-                        "Collision: Output path is identical to input path. Overwrite prohibited."
-                            .to_string(),
-                    );
-                }
-            }
-            CollisionPolicy::Ask => {
-                return Err(
-                    "Collision: File already exists. 'Ask' policy requires UI resolution."
-                        .to_string(),
-                );
-            }
-        }
+    if !out_dir.is_dir() {
+        return Err("Output root is not a directory".into());
     }
-
-    // 3. Isolated Temporary Job Directory
-    let temp_dir = tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    if is_dir && out_dir.starts_with(&input_path) {
+        return Err("Archive output must be outside the input folder".into());
+    }
+    let policy = req
+        .collision_policy
+        .clone()
+        .unwrap_or(CollisionPolicy::AutoRename);
+    let temp_dir = tempfile::Builder::new()
+        .prefix(".file2file-")
+        .tempdir_in(&out_dir)
+        .map_err(|e| format!("Failed to create output workspace: {e}"))?;
     let temp_output = if target_ext == "folder" {
         temp_dir.path().join("extracted_out")
     } else {
@@ -405,14 +378,31 @@ pub async fn convert_single_file<R: tauri::Runtime>(
             .await
             .map(|_| vec![])
     } else if category == FileCategory::Data {
-        run_data_conversion(&input_path, &temp_output, &input_ext, &target_ext)
+        let (input, output, from, to) = (
+            input_path.clone(),
+            temp_output.clone(),
+            input_ext.clone(),
+            target_ext.clone(),
+        );
+        tokio::task::spawn_blocking(move || run_data_conversion_sync(&input, &output, &from, &to))
             .await
+            .map_err(|e| e.to_string())?
             .map(|_| vec![])
     } else if category == FileCategory::Archive || input_ext == "folder" || input_ext == "directory"
     {
-        run_archive_conversion(&input_path, &temp_output, &input_ext, &target_ext)
-            .await
-            .map(|_| vec![])
+        let (input, output, from, to) = (
+            input_path.clone(),
+            temp_output.clone(),
+            input_ext.clone(),
+            target_ext.clone(),
+        );
+        let cancellation = state.subscribe(&job_id)?;
+        tokio::task::spawn_blocking(move || {
+            crate::archive::convert(&input, &output, &from, &to, Some(cancellation))
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map(|_| vec![])
     } else if category == FileCategory::Image || category == FileCategory::Vector {
         if target_ext == "pdf" || get_category_for_extension(&target_ext) == FileCategory::Image {
             run_image_magick_conversion(&app, state, &job_id, &input_path, &temp_output)
@@ -454,37 +444,21 @@ pub async fn convert_single_file<R: tauri::Runtime>(
         .await
     };
 
-    state.active_jobs.lock().await.remove(&job_id);
+    state.check(&job_id)?;
     let elapsed = start_time.elapsed().as_millis() as u64;
 
     match execution_result {
-        Ok(warnings) => {
-            // 4. Output Verification
-            if !temp_output.exists() {
-                return Err("Engine reported success but output artifact is missing.".to_string());
+        Ok(mut warnings) => {
+            let (output_path, skipped) = state.publish(&job_id, || {
+                crate::output::publish(&temp_output, &out_dir, &safe_stem, &target_ext, &policy)
+            })?;
+            if skipped {
+                warnings
+                    .push("Existing output preserved; conversion skipped at publication.".into());
             }
-
-            let converted_size = if target_ext == "folder" {
-                // If output is a directory, move whole dir
-                if output_path.exists() {
-                    let _ = std::fs::remove_dir_all(&output_path);
-                }
-                std::fs::rename(&temp_output, &output_path)
-                    .map_err(|e| format!("Failed to move extracted directory: {}", e))?;
-                0
-            } else {
-                let size = std::fs::metadata(&temp_output)
-                    .map(|m| m.len())
-                    .unwrap_or(0);
-                if size == 0 {
-                    return Err("Conversion produced an empty 0-byte file.".to_string());
-                }
-                // Copy from temp to destination
-                std::fs::copy(&temp_output, &output_path)
-                    .map_err(|e| format!("Failed to save final file: {}", e))?;
-                size
-            };
-
+            let converted_size = fs::metadata(&output_path)
+                .map(|m| if m.is_file() { m.len() } else { 0 })
+                .unwrap_or(0);
             Ok(ConversionResult {
                 job_id,
                 input_path: req.input_path.clone(),
@@ -526,6 +500,22 @@ fn validate_request_parameters(
         ));
     }
 
+    if let Some(encoder) = req.selected_encoder.as_deref() {
+        if ![
+            "auto",
+            "libx264",
+            "libx265",
+            "h264_nvenc",
+            "hevc_nvenc",
+            "h264_qsv",
+            "h264_vaapi",
+            "h264_videotoolbox",
+        ]
+        .contains(&encoder)
+        {
+            return Err("Unsupported video encoder".into());
+        }
+    }
     if let Some(crf) = req.crf {
         if crf > 51 {
             return Err("CRF value out of range (0-51)".to_string());
@@ -534,14 +524,23 @@ fn validate_request_parameters(
     if let Some(res) = &req.resolution {
         if res != "original" && !res.is_empty() {
             let re = regex::Regex::new(r"^\d+x\d+$").map_err(|_| "Regex err")?;
-            if !re.is_match(res) {
+            if !re.is_match(res)
+                || res
+                    .split('x')
+                    .any(|n| n.parse::<u32>().map_or(true, |v| v == 0 || v > 8192))
+            {
                 return Err("Invalid resolution format. Expected 'WxH' or 'original'.".to_string());
             }
         }
     }
     if let Some(br) = &req.audio_bitrate {
         let re = regex::Regex::new(r"^\d+k$").map_err(|_| "Regex err")?;
-        if !re.is_match(br) {
+        if !re.is_match(br)
+            || br
+                .trim_end_matches('k')
+                .parse::<u32>()
+                .map_or(true, |v| v == 0 || v > 1536)
+        {
             return Err("Invalid audio bitrate format. Expected 'Nk' (e.g. 192k).".to_string());
         }
     }
@@ -702,18 +701,30 @@ async fn run_ffmpeg_conversion<R: tauri::Runtime>(
     target_ext: &str,
 ) -> Result<Vec<String>, String> {
     let mut warnings = Vec::new();
+    let paths = FfmpegPaths {
+        input,
+        output,
+        target_ext,
+    };
 
-    if req.hardware_accel {
-        let hw_res = execute_ffmpeg(app, state, job_id, req, input, output, target_ext, true).await;
+    if req.hardware_accel && target_ext != "webm" {
+        let hw_res = execute_ffmpeg(app, state, job_id, req, &paths, true).await;
         if hw_res.is_ok() {
             return Ok(warnings);
         }
+        state.check(job_id)?;
         warnings.push("Hardware acceleration failed; fell back to software encoding.".to_string());
     }
 
-    execute_ffmpeg(app, state, job_id, req, input, output, target_ext, false)
+    execute_ffmpeg(app, state, job_id, req, &paths, false)
         .await
         .map(|_| warnings)
+}
+
+struct FfmpegPaths<'a> {
+    input: &'a Path,
+    output: &'a Path,
+    target_ext: &'a str,
 }
 
 async fn execute_ffmpeg<R: tauri::Runtime>(
@@ -721,11 +732,12 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
     state: &crate::AppState,
     job_id: &str,
     req: &ConversionRequest,
-    input: &Path,
-    output: &Path,
-    target_ext: &str,
+    paths: &FfmpegPaths<'_>,
     use_hw: bool,
 ) -> Result<(), String> {
+    let input = paths.input;
+    let output = paths.output;
+    let target_ext = paths.target_ext;
     let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
     let output_str = output
         .to_str()
@@ -738,14 +750,23 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
     let is_video_target = matches!(target_ext, "mp4" | "mov" | "mkv" | "webm" | "avi");
     let is_gif_target = target_ext == "gif";
 
-    let mut args = vec!["-y".to_string(), "-i".to_string(), input_str.to_string()];
+    let mut args = vec![
+        "-nostdin".into(),
+        "-v".into(),
+        "error".into(),
+        "-y".into(),
+        "-protocol_whitelist".into(),
+        "file,pipe".into(),
+        "-i".into(),
+        input_str.into(),
+    ];
 
     if is_audio_target {
         // Strip video stream
         args.push("-vn".to_string());
         // Map audio stream optionally
         args.push("-map".to_string());
-        args.push("0:a:0?".to_string());
+        args.push("0:a:0".to_string());
 
         let bitrate = req.audio_bitrate.as_deref().unwrap_or("256k");
 
@@ -790,7 +811,7 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
     } else if is_video_target {
         // Map video stream and optional audio stream
         args.push("-map".to_string());
-        args.push("0:v:0?".to_string());
+        args.push("0:v:0".to_string());
         args.push("-map".to_string());
         args.push("0:a?".to_string());
         args.push("-map".to_string());
@@ -798,7 +819,11 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
 
         // Video codec
         if use_hw {
-            let enc = req.selected_encoder.as_deref().unwrap_or("h264_nvenc");
+            let enc = req
+                .selected_encoder
+                .as_deref()
+                .filter(|s| *s != "auto")
+                .unwrap_or("libx264");
 
             // Basic mismatch prevention: don't use h264 for webm
             let actual_enc = if target_ext == "webm" && enc.contains("264") {
@@ -892,7 +917,7 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
         args.push("-vn".to_string());
         args.push("-an".to_string());
         args.push("-map".to_string());
-        args.push("0:s:0?".to_string());
+        args.push("0:s:0".to_string());
         args.push("-c:s".to_string());
         args.push("srt".to_string());
     } else if is_gif_target {
@@ -913,30 +938,6 @@ async fn execute_ffmpeg<R: tauri::Runtime>(
             "fps=12,{},split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse",
             scale_filter
         ));
-    }
-
-    // Input-specific overrides
-    let input_ext = input
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-
-    // RAW Image Preview Extraction (FFmpeg can decode many RAW formats via libavcodec or internal decoders)
-    if ["raw", "cr2", "nef", "arw", "dng"].contains(&input_ext.as_str()) {
-        if !is_video_target && !is_audio_target && !is_gif_target && target_ext != "srt" {
-            // Forcing single frame extraction for images
-            args.insert(3, "-frames:v".to_string());
-            args.insert(4, "1".to_string());
-            // Ensure we output a valid image codec
-            if target_ext == "jpg" || target_ext == "jpeg" {
-                args.push("-c:v".to_string());
-                args.push("mjpeg".to_string());
-            } else if target_ext == "png" {
-                args.push("-c:v".to_string());
-                args.push("png".to_string());
-            }
-        }
     }
 
     // Metadata handling
@@ -989,6 +990,11 @@ async fn run_pandoc_conversion<R: tauri::Runtime>(
         output_str.to_string(),
     ];
 
+    args.push("--sandbox".into());
+    if output_ext == "txt" {
+        args.extend(["-t".into(), "plain".into()]);
+    }
+
     // Infer accurate reader format
     match input_ext.as_str() {
         "md" | "markdown" => {
@@ -1039,12 +1045,15 @@ async fn run_pandoc_conversion<R: tauri::Runtime>(
     }
 }
 
-async fn run_data_conversion(
+fn run_data_conversion_sync(
     input: &Path,
     output: &Path,
     input_ext: &str,
     target_ext: &str,
 ) -> Result<(), String> {
+    if fs::metadata(input).map_err(|e| e.to_string())?.len() > 32 * 1024 * 1024 {
+        return Err("Structured input exceeds 32 MiB safety limit".into());
+    }
     let input_file = File::open(input).map_err(|e| format!("Failed to open input file: {}", e))?;
     let reader = BufReader::new(input_file);
 
@@ -1058,6 +1067,7 @@ async fn run_data_conversion(
                 .headers()
                 .map_err(|e| format!("CSV headers error: {}", e))?
                 .clone();
+            validate_headers(headers.iter())?;
             let mut items = Vec::new();
             for result in csv_reader.records() {
                 let record = result.map_err(|e| format!("CSV record error: {}", e))?;
@@ -1083,12 +1093,13 @@ async fn run_data_conversion(
                 .map_err(|e| format!("Failed to read input file: {}", e))?;
             quick_xml::de::from_str(&content).map_err(|e| format!("XML parse error: {}", e))?
         }
-        "xlsx" | "xls" => {
+        "xlsx" => {
+            check_xlsx_size(input)?;
             let mut excel: Xlsx<_> =
                 calamine::open_workbook(input).map_err(|e| format!("Excel open error: {}", e))?;
             let sheet_name = excel
                 .sheet_names()
-                .get(0)
+                .first()
                 .ok_or("No sheets in excel")?
                 .clone();
             let range = excel
@@ -1103,6 +1114,7 @@ async fn run_data_conversion(
                 .iter()
                 .map(|c| c.to_string())
                 .collect();
+            validate_headers(headers.iter().map(String::as_str))?;
 
             for row in rows {
                 let mut map = serde_json::Map::new();
@@ -1126,21 +1138,37 @@ async fn run_data_conversion(
         _ => Value::Null,
     };
 
+    if matches!(target_ext, "csv" | "xlsx") {
+        let rows = value
+            .as_array()
+            .ok_or("Tabular output requires an array of objects")?;
+        if rows.is_empty() || rows.iter().any(|row| !row.is_object()) {
+            return Err(
+                "Tabular output requires a nonempty array of objects; scalar rows would lose data"
+                    .into(),
+            );
+        }
+    }
+    validate_value(&value, 0)?;
     match (input_ext, target_ext) {
         (i, "xlsx") if i != "xlsx" && value != Value::Null => {
             let mut workbook = Workbook::new();
             let worksheet = workbook.add_worksheet();
             if let Some(arr) = value.as_array() {
                 if !arr.is_empty() {
-                    let mut headers = Vec::new();
-                    if let Some(first) = arr.get(0).and_then(|v| v.as_object()) {
-                        for key in first.keys() {
-                            headers.push(key.clone());
-                        }
+                    let headers: Vec<String> = arr
+                        .iter()
+                        .filter_map(Value::as_object)
+                        .flat_map(|obj| obj.keys().cloned())
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .into_iter()
+                        .collect();
+                    if headers.len() > 16_384 || arr.len() > 1_048_575 {
+                        return Err("Data exceeds XLSX row or column limits".into());
                     }
                     for (col, header) in headers.iter().enumerate() {
                         worksheet
-                            .write(0, col as u16, header)
+                            .write_string(0, col as u16, header)
                             .map_err(|e| format!("Excel header write error: {}", e))?;
                     }
                     for (row_idx, item) in arr.iter().enumerate() {
@@ -1149,7 +1177,20 @@ async fn run_data_conversion(
                                 if let Some(val) = obj.get(header) {
                                     match val {
                                         Value::Number(n) => {
-                                            if let Some(f) = n.as_f64() {
+                                            if n.as_i64().is_some_and(|v| {
+                                                v.unsigned_abs() > 9_007_199_254_740_991
+                                            }) || n
+                                                .as_u64()
+                                                .is_some_and(|v| v > 9_007_199_254_740_991)
+                                            {
+                                                worksheet
+                                                    .write_string(
+                                                        row_idx as u32 + 1,
+                                                        col_idx as u16,
+                                                        n.to_string(),
+                                                    )
+                                                    .map_err(|e| e.to_string())?;
+                                            } else if let Some(f) = n.as_f64() {
                                                 worksheet
                                                     .write(row_idx as u32 + 1, col_idx as u16, f)
                                                     .map_err(|e| {
@@ -1159,7 +1200,7 @@ async fn run_data_conversion(
                                         }
                                         Value::String(s) => {
                                             worksheet
-                                                .write(row_idx as u32 + 1, col_idx as u16, s)
+                                                .write_string(row_idx as u32 + 1, col_idx as u16, s)
                                                 .map_err(|e| format!("Excel write error: {}", e))?;
                                         }
                                         Value::Bool(b) => {
@@ -1197,6 +1238,7 @@ async fn run_data_conversion(
         (i, "xml") if i != "xml" && value != Value::Null => {
             let mut buf = String::new();
             buf.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<root>\n");
+            validate_xml(&value)?;
             val_to_xml(&value, &mut buf, 1);
             buf.push_str("</root>\n");
             std::fs::write(output, buf).map_err(|e| format!("Failed to write output: {}", e))?;
@@ -1241,23 +1283,27 @@ async fn run_data_conversion(
                 let header_list: Vec<String> = headers.into_iter().collect();
                 let mut wtr = csv::Writer::from_path(output)
                     .map_err(|e| format!("Failed to create CSV writer: {}", e))?;
-                wtr.write_record(&header_list)
-                    .map_err(|e| format!("CSV header write error: {}", e))?;
+                wtr.write_record(
+                    header_list
+                        .iter()
+                        .map(|cell| safe_csv_cell(cell).into_owned()),
+                )
+                .map_err(|e| format!("CSV header write error: {}", e))?;
                 for item in arr {
                     if let Some(obj) = item.as_object() {
                         let row: Vec<String> = header_list
                             .iter()
                             .map(|h| {
                                 obj.get(h)
-                                    .and_then(|v| match v {
-                                        Value::String(s) => Some(s.clone()),
-                                        Value::Null => Some(String::new()),
-                                        _ => Some(v.to_string()),
+                                    .map(|v| match v {
+                                        Value::String(s) => s.clone(),
+                                        Value::Null => String::new(),
+                                        _ => v.to_string(),
                                     })
                                     .unwrap_or_default()
                             })
                             .collect();
-                        wtr.write_record(&row)
+                        wtr.write_record(row.iter().map(|cell| safe_csv_cell(cell).into_owned()))
                             .map_err(|e| format!("CSV row write error: {}", e))?;
                     }
                 }
@@ -1299,6 +1345,7 @@ async fn run_data_conversion(
                 "CREATE TABLE IF NOT EXISTS \"{}\" (\n",
                 safe_table.replace('"', "\"\"")
             );
+            let mut sql_columns = std::collections::HashSet::new();
             for (i, h) in headers.iter().enumerate() {
                 let col = h
                     .chars()
@@ -1315,6 +1362,11 @@ async fn run_data_conversion(
                 } else {
                     col
                 };
+                if !sql_columns.insert(safe_col.to_lowercase()) {
+                    return Err(
+                        "CSV column names collide after SQL identifier normalization".into(),
+                    );
+                }
                 sql.push_str(&format!(
                     "  \"{}\" TEXT{}",
                     safe_col.replace('"', "\"\""),
@@ -1333,8 +1385,6 @@ async fn run_data_conversion(
                 for (i, val) in record.iter().enumerate() {
                     if val.is_empty() {
                         sql.push_str("NULL");
-                    } else if val.parse::<i64>().is_ok() || val.parse::<f64>().is_ok() {
-                        sql.push_str(val);
                     } else {
                         sql.push_str(&format!("'{}'", val.replace('\'', "''")));
                     }
@@ -1391,7 +1441,10 @@ async fn run_data_conversion(
         }
         ("sqlite", "json") | ("db", "json") => {
             let conn =
-                Connection::open(input).map_err(|e| format!("Failed to open SQLite: {}", e))?;
+                Connection::open_with_flags(input, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+                    .map_err(|e| format!("Failed to open SQLite: {}", e))?;
+            conn.execute_batch("PRAGMA trusted_schema=OFF; PRAGMA query_only=ON;")
+                .map_err(|e| e.to_string())?;
             let mut table_names = Vec::new();
             let mut stmt = conn
                 .prepare("SELECT name FROM sqlite_master WHERE type='table'")
@@ -1507,8 +1560,100 @@ async fn run_data_conversion(
     Ok(())
 }
 
+fn validate_headers<'a>(headers: impl Iterator<Item = &'a str>) -> Result<(), String> {
+    let mut seen = std::collections::HashSet::new();
+    for header in headers {
+        if header.is_empty() || !seen.insert(header) {
+            return Err("Empty or duplicate column names would lose data".into());
+        }
+    }
+    Ok(())
+}
+
+fn safe_csv_cell(value: &str) -> std::borrow::Cow<'_, str> {
+    if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        std::borrow::Cow::Owned(format!("'{value}"))
+    } else {
+        std::borrow::Cow::Borrowed(value)
+    }
+}
+
+fn check_xlsx_size(path: &Path) -> Result<(), String> {
+    let mut zip = zip::ZipArchive::new(File::open(path).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+    if zip.len() > 10_000 {
+        return Err("XLSX contains too many entries".into());
+    }
+    let mut total = 0u64;
+    for i in 0..zip.len() {
+        total = total
+            .checked_add(zip.by_index(i).map_err(|e| e.to_string())?.size())
+            .ok_or("XLSX size overflow")?;
+        if total > 128 * 1024 * 1024 {
+            return Err("Expanded XLSX exceeds 128 MiB safety limit".into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_value(value: &Value, depth: usize) -> Result<(), String> {
+    if depth > 64 {
+        return Err("Structured data exceeds 64 nesting levels".into());
+    }
+    match value {
+        Value::Array(values) => {
+            for value in values {
+                validate_value(value, depth + 1)?;
+            }
+        }
+        Value::Object(values) => {
+            for value in values.values() {
+                validate_value(value, depth + 1)?;
+            }
+        }
+        _ => (),
+    }
+    Ok(())
+}
+
+fn validate_xml(value: &Value) -> Result<(), String> {
+    match value {
+        Value::Object(map) => {
+            let mut tags = std::collections::HashSet::new();
+            for (key, value) in map {
+                let tag = sanitize_xml_tag(key);
+                if !tag.is_ascii() || !tags.insert(tag) {
+                    return Err(
+                        "XML field names are ambiguous or unsupported after normalization".into(),
+                    );
+                }
+                validate_xml(value)?;
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                validate_xml(value)?;
+            }
+        }
+        Value::String(s)
+            if s.chars().any(|c| {
+                (c < ' ' && !matches!(c, '\t' | '\n' | '\r'))
+                    || matches!(c, '\u{fffe}' | '\u{ffff}')
+            }) =>
+        {
+            return Err("Text contains characters forbidden in XML 1.0".into())
+        }
+        _ => (),
+    }
+    Ok(())
+}
+
 fn parse_inferred_scalar(s: &str) -> Value {
     let trimmed = s.trim();
+    if trimmed != s || (trimmed.len() > 1 && trimmed.starts_with('0') && !trimmed.starts_with("0."))
+    {
+        return Value::String(s.into());
+    }
     if trimmed.is_empty() {
         return Value::Null;
     }
@@ -1586,260 +1731,27 @@ fn val_to_xml(v: &Value, b: &mut String, depth: usize) {
     }
 }
 
+#[cfg(test)]
 async fn run_archive_conversion(
     input: &Path,
     output: &Path,
-    input_ext: &str,
-    target_ext: &str,
+    from: &str,
+    to: &str,
 ) -> Result<(), String> {
-    let max_total_size: u64 = 5 * 1024 * 1024 * 1024; // 5GB safety limit
-    let max_files = 10000;
-
-    match (input_ext, target_ext) {
-        ("tar", "zip") => {
-            let file = File::open(input).map_err(|e| format!("Failed to open TAR: {}", e))?;
-            let mut archive = tar::Archive::new(file);
-
-            let out_file =
-                File::create(output).map_err(|e| format!("Failed to create ZIP: {}", e))?;
-            let mut zip = zip::ZipWriter::new(out_file);
-            let options = zip::write::SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Deflated)
-                .unix_permissions(0o755);
-
-            let mut count = 0;
-            let mut total_size: u64 = 0;
-
-            for entry in archive.entries().map_err(|e| format!("TAR error: {}", e))? {
-                let mut entry = entry.map_err(|e| format!("TAR entry error: {}", e))?;
-                count += 1;
-                if count > max_files {
-                    return Err(format!(
-                        "Archive exceeds maximum file count ({})",
-                        max_files
-                    ));
-                }
-                total_size += entry.size();
-                if total_size > max_total_size {
-                    return Err("Archive exceeds maximum unpacked size limit (5GB)".to_string());
-                }
-
-                let path = entry
-                    .path()
-                    .map_err(|e| format!("Invalid TAR path: {}", e))?;
-                // Zip Slip protection
-                let safe_name = path
-                    .components()
-                    .filter_map(|c| match c {
-                        std::path::Component::Normal(s) => s.to_str(),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("/");
-
-                if safe_name.is_empty() {
-                    continue;
-                }
-
-                if entry.header().entry_type().is_dir() {
-                    zip.add_directory(&format!("{}/", safe_name), options)
-                        .map_err(|e| format!("Zip error: {}", e))?;
-                } else {
-                    zip.start_file(&safe_name, options)
-                        .map_err(|e| format!("Zip error: {}", e))?;
-                    io::copy(&mut entry, &mut zip)
-                        .map_err(|e| format!("Zip write error: {}", e))?;
-                }
-            }
-
-            zip.finish()
-                .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
-        }
-        ("gz" | "tgz", "zip") => {
-            let file = File::open(input).map_err(|e| format!("Failed to open GZ: {}", e))?;
-            let decoder = GzDecoder::new(file);
-            let mut tar_archive = tar::Archive::new(decoder);
-
-            let out_file =
-                File::create(output).map_err(|e| format!("Failed to create ZIP: {}", e))?;
-            let mut zip = zip::ZipWriter::new(out_file);
-            let options = zip::write::SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Deflated)
-                .unix_permissions(0o755);
-
-            let mut count = 0;
-            let mut total_size: u64 = 0;
-            let mut is_tar = false;
-
-            if let Ok(entries) = tar_archive.entries() {
-                for entry in entries {
-                    if let Ok(mut entry) = entry {
-                        if let Ok(path) = entry.path() {
-                            is_tar = true;
-                            count += 1;
-                            if count > max_files {
-                                return Err("Archive contains too many files".to_string());
-                            }
-                            total_size += entry.size();
-                            if total_size > max_total_size {
-                                return Err("Archive exceeds size limit".to_string());
-                            }
-                            let safe_name = path
-                                .components()
-                                .filter_map(|c| match c {
-                                    std::path::Component::Normal(s) => s.to_str(),
-                                    _ => None,
-                                })
-                                .collect::<Vec<_>>()
-                                .join("/");
-
-                            if safe_name.is_empty() {
-                                continue;
-                            }
-
-                            if entry.header().entry_type().is_dir() {
-                                let _ = zip.add_directory(&format!("{}/", safe_name), options);
-                            } else {
-                                zip.start_file(&safe_name, options)
-                                    .map_err(|e| format!("Zip error: {}", e))?;
-                                io::copy(&mut entry, &mut zip)
-                                    .map_err(|e| format!("Zip write error: {}", e))?;
-                            }
-                        }
-                    }
-                }
-            }
-
-            if !is_tar {
-                // Not a tar, re-open to stream the raw GZ contents
-                let file = File::open(input).map_err(|e| format!("Failed to open GZ: {}", e))?;
-                let mut decoder = GzDecoder::new(file);
-
-                let inner_name = input
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("unpacked_file");
-                zip.start_file(inner_name, options)
-                    .map_err(|e| format!("Zip error: {}", e))?;
-                io::copy(&mut decoder, &mut zip).map_err(|e| format!("Zip write error: {}", e))?;
-            }
-
-            zip.finish()
-                .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
-        }
-        ("folder" | "directory", "zip") => {
-            let out_file =
-                File::create(output).map_err(|e| format!("Failed to create ZIP: {}", e))?;
-            let mut zip = zip::ZipWriter::new(out_file);
-            let options = zip::write::SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Deflated)
-                .unix_permissions(0o755);
-
-            add_dir_to_zip(&mut zip, input, input, options)?;
-            zip.finish()
-                .map_err(|e| format!("Failed to finalize ZIP: {}", e))?;
-        }
-        ("zip", "folder") => {
-            let file = File::open(input).map_err(|e| format!("Failed to open ZIP: {}", e))?;
-            let mut archive =
-                zip::ZipArchive::new(file).map_err(|e| format!("Invalid ZIP: {}", e))?;
-
-            if archive.len() > max_files {
-                return Err(format!(
-                    "ZIP archive contains too many files (max {})",
-                    max_files
-                ));
-            }
-
-            fs::create_dir_all(output)
-                .map_err(|e| format!("Failed to create output extraction directory: {}", e))?;
-
-            let mut total_extracted_size: u64 = 0;
-
-            for i in 0..archive.len() {
-                let mut file = archive
-                    .by_index(i)
-                    .map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
-
-                total_extracted_size += file.size();
-                if total_extracted_size > max_total_size {
-                    return Err("ZIP extraction exceeded size limit (5GB)".to_string());
-                }
-
-                // Zip Slip protection
-                let enclosed = file.enclosed_name().ok_or_else(|| {
-                    "Unsafe relative path detected in ZIP archive (Zip Slip prevention)".to_string()
-                })?;
-
-                let outpath = output.join(enclosed);
-
-                if file.is_dir() || file.name().ends_with('/') {
-                    fs::create_dir_all(&outpath)
-                        .map_err(|e| format!("Failed to create directory: {}", e))?;
-                } else {
-                    if let Some(p) = outpath.parent() {
-                        if !p.exists() {
-                            fs::create_dir_all(p)
-                                .map_err(|e| format!("Failed to create parent directory: {}", e))?;
-                        }
-                    }
-                    let mut outfile = File::create(&outpath).map_err(|e| {
-                        format!("Failed to create file {}: {}", outpath.display(), e)
-                    })?;
-                    io::copy(&mut file, &mut outfile)
-                        .map_err(|e| format!("Failed to write extracted file: {}", e))?;
-                }
-            }
-        }
-        _ => {
-            return Err(format!(
-                "Unsupported archive conversion: {} to {}",
-                input_ext, target_ext
-            ))
-        }
-    }
-    Ok(())
+    crate::archive::convert(input, output, from, to, None)
 }
 
-fn add_file_to_zip<W: io::Write + io::Seek>(
-    zip: &mut zip::ZipWriter<W>,
-    path: &Path,
-    name: &str,
-    options: zip::write::SimpleFileOptions,
+#[cfg(test)]
+async fn run_data_conversion(
+    input: &Path,
+    output: &Path,
+    from: &str,
+    to: &str,
 ) -> Result<(), String> {
-    zip.start_file(name, options)
-        .map_err(|e| format!("Zip start_file error: {}", e))?;
-    let mut f = File::open(path).map_err(|e| format!("Failed to open file for zipping: {}", e))?;
-    io::copy(&mut f, zip).map_err(|e| format!("Failed to write to zip: {}", e))?;
-    Ok(())
+    run_data_conversion_sync(input, output, from, to)
 }
 
-fn add_dir_to_zip<W: io::Write + io::Seek>(
-    zip: &mut zip::ZipWriter<W>,
-    full_path: &Path,
-    base_path: &Path,
-    options: zip::write::SimpleFileOptions,
-) -> Result<(), String> {
-    for entry in fs::read_dir(full_path).map_err(|e| format!("Failed to read directory: {}", e))? {
-        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
-        let path = entry.path();
-        let name = path
-            .strip_prefix(base_path)
-            .map_err(|e| format!("Prefix error: {}", e))?
-            .to_str()
-            .ok_or("Path contains invalid UTF-8")?;
-
-        if path.is_dir() {
-            zip.add_directory(format!("{}/", name), options)
-                .map_err(|e| format!("Zip add_dir error: {}", e))?;
-            add_dir_to_zip(zip, &path, base_path, options)?;
-        } else {
-            add_file_to_zip(zip, &path, name, options)?;
-        }
-    }
-    Ok(())
-}
-
+#[cfg(test)]
 use std::io::Write;
 
 #[cfg(test)]

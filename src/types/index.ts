@@ -23,6 +23,7 @@ export interface BinaryStatus {
     version: string | null;
     path_or_sidecar: string;
     absolute_path?: string | null;
+    error?: string | null;
 }
 
 export interface CategoryStatus {

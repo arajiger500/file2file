@@ -17,11 +17,16 @@ pnpm-debug.log*
 # Environment & Editor
 .env
 .env.*
+!.env.example
 .DS_Store
+Thumbs.db
+Desktop.ini
 .vscode/*
 !.vscode/extensions.json
 !.vscode/tasks.json
 .idea/
+*.swp
+*.swo
 
 # Large Binaries (Bundled at build time, not in source)
 binaries/
@@ -50,4 +55,3 @@ coverage/
 debug-output/
 qa-output/
 conversion-output/
-

@@ -14,9 +14,9 @@ export const QuickConverters: React.FC<QuickConvertersProps> = ({
 }) => {
     const isEngineMissing = (preset: QuickPreset) => {
         if (!sidecars) return false;
-        if (preset.from_category === "document" && (!sidecars.pandoc.available || !sidecars.pdftohtml.available)) return true;
-        if (preset.from_category === "image" && !sidecars.imagemagick.available) return true;
-        if (preset.from_category === "video" && !sidecars.ffmpeg.available) return true;
+        if (preset.from_category === "document" && (!sidecars.pandoc?.available || !sidecars.pdftohtml?.available)) return true;
+        if (preset.from_category === "image" && !sidecars.imagemagick?.available) return true;
+        if (preset.from_category === "video" && !sidecars.ffmpeg?.available) return true;
         return false;
     };
     return (

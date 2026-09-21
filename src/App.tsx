@@ -37,7 +37,7 @@ export function App() {
     const [settings, setSettings] = useState<AdvancedSettings>({
         crf: 23,
         resolution: "original",
-        hardwareAccel: true,
+        hardwareAccel: false,
         selectedEncoder: "auto",
         stripMetadata: true,
         audioBitrate: "192k",
@@ -65,11 +65,22 @@ export function App() {
         try {
             const savedSettings = localStorage.getItem("file2file_settings");
             if (savedSettings) {
-                setSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) }));
+                const parsed = JSON.parse(savedSettings);
+                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    setSettings(prev => ({ ...prev, ...parsed }));
+                }
             }
             const savedHistory = localStorage.getItem("file2file_history");
             if (savedHistory) {
-                setHistory(JSON.parse(savedHistory).slice(0, 50));
+                const parsed = JSON.parse(savedHistory);
+                if (Array.isArray(parsed)) {
+                    setHistory(parsed.filter(item =>
+                        item && typeof item.job_id === "string" && typeof item.input_path === "string" &&
+                        typeof item.output_path === "string" && typeof item.success === "boolean" &&
+                        typeof item.original_size_bytes === "number" && typeof item.converted_size_bytes === "number" &&
+                        typeof item.elapsed_ms === "number"
+                    ).slice(0, 50));
+                }
             }
         } catch (e) {
             console.warn("Storage load warning:", e);
@@ -87,13 +98,13 @@ export function App() {
     // Persist history
     useEffect(() => {
         try {
-            localStorage.setItem("file2file_history", JSON.stringify(history.slice(0, 50)));
+            localStorage.setItem("file2file_history", JSON.stringify(history.slice(0, 50).map(result => ({ ...result, download_url: undefined }))));
         } catch {}
     }, [history]);
 
     const handleAddFiles = async (newFiles: FileItem[]) => {
         if (newFiles.length === 0) return;
-        setFiles(prev => [...prev, ...newFiles]);
+        setFiles(prev => [...prev, ...newFiles.filter(n => !prev.some(f => f.path === n.path))].slice(0, 256));
 
         try {
             const primaryExt = newFiles[0].extension;
@@ -234,8 +245,8 @@ export function App() {
                                         <p className="text-[12px] font-medium text-text-secondary">Local Execution</p>
                                         <p className="text-tiny text-text-muted leading-tight">
                                             {isTauri()
-                                                ? "Conversions run on your device using bundled sidecar engines."
-                                                : "Browser processing is performed locally, though some components (like PDF workers) may be fetched from a CDN."}
+                                                ? "Conversions run on your device using installed local engines."
+                                                : "Browser processing is performed locally; the PDF worker is included in this build."}
                                         </p>
                                     </div>
                                 </div>

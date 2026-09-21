@@ -5,9 +5,10 @@ use std::path::Path;
 use tempfile::tempdir;
 
 #[tokio::test]
+#[ignore = "requires ImageMagick, Poppler and Pandoc"]
 async fn test_pdf_to_docx_image_preservation() {
     let app = tauri::test::mock_builder()
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .build(tauri::generate_context!())
         .unwrap();
     let handle = app.handle();
@@ -17,24 +18,26 @@ async fn test_pdf_to_docx_image_preservation() {
     let png_path = dir.path().join("source.png");
 
     // Create a real PNG first
-    let magick_cmd = get_binary_command(handle, "magick").await.unwrap();
-    let _ = magick_cmd.args([
-        "-size", "100x100", "xc:blue",
-        png_path.to_str().unwrap()
-    ]).output().await.unwrap();
-
-    // Convert PNG to PDF using ImageMagick
-    let magick_cmd2 = get_binary_command(handle, "magick").await.unwrap();
-    let output = magick_cmd2
-        .args([
-            png_path.to_str().unwrap(),
-            input_path.to_str().unwrap()
-        ])
+    let mut magick_cmd = get_binary_command(handle, "magick").await.unwrap();
+    let _ = magick_cmd
+        .args(["-size", "100x100", "xc:blue", png_path.to_str().unwrap()])
         .output()
         .await
         .unwrap();
 
-    assert!(output.status.success(), "magick failed: {}", String::from_utf8_lossy(&output.stderr));
+    // Convert PNG to PDF using ImageMagick
+    let mut magick_cmd2 = get_binary_command(handle, "magick").await.unwrap();
+    let output = magick_cmd2
+        .args([png_path.to_str().unwrap(), input_path.to_str().unwrap()])
+        .output()
+        .await
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "magick failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(input_path.exists(), "Test PDF was not created");
 
     let mut req = ConversionRequest::new(input_path.to_str().unwrap(), "docx");

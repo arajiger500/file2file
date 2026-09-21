@@ -17,10 +17,10 @@ export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availa
     const isEngineMissing = (engine: string) => {
         if (!sidecars) return false;
         const e = engine.toLowerCase();
-        if (e.includes("ffmpeg") && !sidecars.ffmpeg.available) return true;
-        if (e.includes("imagemagick") && !sidecars.imagemagick.available) return true;
-        if (e.includes("pandoc") && !sidecars.pandoc.available) return true;
-        if (e.includes("poppler") && (!sidecars.pdftotext.available || !sidecars.pdftohtml.available)) return true;
+        if (e.includes("ffmpeg") && !sidecars.ffmpeg?.available) return true;
+        if (e.includes("imagemagick") && !sidecars.imagemagick?.available) return true;
+        if (e.includes("pandoc") && !sidecars.pandoc?.available) return true;
+        if (e.includes("poppler") && (!sidecars.pdftotext?.available || !sidecars.pdftohtml?.available)) return true;
         return false;
     };
 

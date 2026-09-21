@@ -23,7 +23,8 @@ pub fn map_technical_error(error: &str, _input_path: &str, target_format: &str) 
 
     // Pandoc specific errors
     if err_lower.contains("pdflatex not found") {
-        return "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live).".to_string();
+        return "PDF generation requires a LaTeX installation (like MiKTeX or TeX Live)."
+            .to_string();
     }
     if err_lower.contains("could not find data file") {
         return "Pandoc could not find a required resource file for this conversion.".to_string();
@@ -31,29 +32,37 @@ pub fn map_technical_error(error: &str, _input_path: &str, target_format: &str) 
 
     // ImageMagick specific errors
     if err_lower.contains("no decode delegate") {
-        return "ImageMagick is missing the required delegate (decoder) for this format.".to_string();
+        return "ImageMagick is missing the required delegate (decoder) for this format."
+            .to_string();
     }
     if err_lower.contains("cache resources exhausted") {
         return "The image is too large for the current ImageMagick resource limits.".to_string();
     }
     if err_lower.contains("failed to read") && err_lower.contains("svg") {
-        return "Failed to parse SVG. It might be malformed or use unsupported features.".to_string();
+        return "Failed to parse SVG. It might be malformed or use unsupported features."
+            .to_string();
     }
 
     // PDF/Poppler specific
-    if err_lower.contains("command not found") || err_lower.contains("not found") {
-        if err_lower.contains("pdftohtml") || err_lower.contains("pdftotext") {
-            return "Poppler utilities (pdftohtml/pdftotext) are missing from your system.".to_string();
-        }
+    if (err_lower.contains("command not found") || err_lower.contains("not found"))
+        && (err_lower.contains("pdftohtml") || err_lower.contains("pdftotext"))
+    {
+        return "Poppler utilities (pdftohtml/pdftotext) are missing from your system.".to_string();
     }
 
     // Generic fallbacks
     if err_lower.contains("failed to create") && err_lower.contains("sidecar") {
-        let utility = if err_lower.contains("ffmpeg") { "FFmpeg" }
-                     else if err_lower.contains("magick") { "ImageMagick" }
-                     else if err_lower.contains("pandoc") { "Pandoc" }
-                     else if err_lower.contains("pdftotext") || err_lower.contains("pdftohtml") { "Poppler" }
-                     else { "a required utility" };
+        let utility = if err_lower.contains("ffmpeg") {
+            "FFmpeg"
+        } else if err_lower.contains("magick") {
+            "ImageMagick"
+        } else if err_lower.contains("pandoc") {
+            "Pandoc"
+        } else if err_lower.contains("pdftotext") || err_lower.contains("pdftohtml") {
+            "Poppler"
+        } else {
+            "a required utility"
+        };
         return format!("{} is missing or could not be started. Please ensure it is correctly bundled or installed.", utility);
     }
 

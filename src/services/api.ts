@@ -22,6 +22,7 @@ async function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Prom
 }
 
 export const api = {
+    scanInputs: (paths: string[]) => invokeTauri<{ path: string; name: string; size: number; is_directory: boolean }[]>("scan_inputs", { paths }),
     detectHardware: () => invokeTauri<HardwareInfo>("detect_hardware"),
     getCompatibleTargets: (inputExt: string) =>
         invokeTauri<FormatOption[]>("get_compatible_targets", { inputExt }),
@@ -35,8 +36,7 @@ export const api = {
         invokeTauri<ConversionResult>("start_conversion", { request }),
     cancelJob: (jobId: string) =>
         invokeTauri<void>("cancel_job", { jobId }),
-    copyFile: (src: string, dest: string) =>
-        invokeTauri<void>("copy_file", { src, dest }),
+    showInFolder: (path: string) => invokeTauri<void>("show_in_folder", { path }),
     downloadFile: async (result: ConversionResult, fallbackFilename?: string) => {
         const filename = fallbackFilename || result.output_path.split("/").pop() || "file2file_output";
         if (result.download_url) {

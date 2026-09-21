@@ -54,7 +54,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                                             <AlertCircle className="w-3.5 h-3.5 text-error shrink-0" />
                                         )}
                                         <span className="text-[12px] font-medium text-text-secondary truncate">
-                                            {item.output_path.split(/[\\/]/).pop() || item.output_path}
+                                            {(item.output_path || item.input_path).split(/[\\/]/).pop() || "Conversion"}
                                         </span>
                                     </div>
                                     <span className="text-tiny font-mono text-text-disabled shrink-0">{item.elapsed_ms}ms</span>

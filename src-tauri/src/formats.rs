@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::registry::Registry;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -126,10 +126,19 @@ pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
 
             let description = match c.category {
                 FileCategory::Video => format!("FFmpeg {} video encoding", c.to_ext.to_uppercase()),
-                FileCategory::Audio => format!("FFmpeg {} audio stream export", c.to_ext.to_uppercase()),
-                FileCategory::Image => format!("ImageMagick {} image encoding", c.to_ext.to_uppercase()),
-                FileCategory::Document => format!("Pandoc/Poppler {} document export", c.to_ext.to_uppercase()),
-                FileCategory::Data => format!("Native structured {} serialization", c.to_ext.to_uppercase()),
+                FileCategory::Audio => {
+                    format!("FFmpeg {} audio stream export", c.to_ext.to_uppercase())
+                }
+                FileCategory::Image => {
+                    format!("ImageMagick {} image encoding", c.to_ext.to_uppercase())
+                }
+                FileCategory::Document => {
+                    format!("Pandoc/Poppler {} document export", c.to_ext.to_uppercase())
+                }
+                FileCategory::Data => format!(
+                    "Native structured {} serialization",
+                    c.to_ext.to_uppercase()
+                ),
                 FileCategory::Archive => {
                     if c.to_ext == "folder" {
                         "Extract all files from ZIP".to_string()
@@ -198,7 +207,7 @@ pub fn get_smart_recommendations(input_ext: &str) -> Vec<FormatOption> {
 }
 
 pub fn get_quick_presets() -> Vec<QuickPreset> {
-// ...
+    // ...
     vec![
         QuickPreset {
             id: "p1".to_string(),

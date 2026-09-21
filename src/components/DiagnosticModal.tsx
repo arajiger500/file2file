@@ -18,8 +18,9 @@ const BinaryRow = ({ status }: { status: BinaryStatus | undefined }) => {
                 <div>
                     <h4 className="text-[13px] font-semibold text-text-primary">{status.name}</h4>
                     <p className="text-tiny font-mono text-text-muted uppercase mt-0.5">
-                        {status.path_or_sidecar}
+                        {status.absolute_path || status.path_or_sidecar}
                     </p>
+                    {status.error && <p className="text-xs text-error mt-1">{status.error}</p>}
                 </div>
             </div>
             <div className="text-right">
@@ -27,7 +28,7 @@ const BinaryRow = ({ status }: { status: BinaryStatus | undefined }) => {
                     {status.version ? (
                         <span>{status.version.split(' ')[0]}</span>
                     ) : (
-                        <span className="text-error font-semibold">MISSING</span>
+                        <span className="text-error font-semibold">{status.absolute_path ? "UNUSABLE" : "MISSING"}</span>
                     )}
                 </div>
             </div>
@@ -43,7 +44,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ isOpen, onClos
             <div className="relative w-full max-w-lg bg-surface border border-border rounded-xl shadow-2xl flex flex-col">
                 <div className="h-[56px] px-6 border-b border-border bg-surface flex items-center justify-between">
                     <h2 className="text-[15px] font-semibold text-text-primary">Engine diagnostics</h2>
-                    <button onClick={onClose} className="p-2 -mr-2 text-text-muted hover:text-text-primary transition-colors">
+                    <button aria-label="Close diagnostics" onClick={onClose} className="p-2 -mr-2 text-text-muted hover:text-text-primary transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -55,7 +56,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({ isOpen, onClos
                             <div className="space-y-1">
                                 <h3 className="text-[13px] font-semibold text-warning">Limited engine availability</h3>
                                 <p className="text-[12px] text-text-secondary leading-relaxed">
-                                    Some core modules are missing. The application will attempt to use fallback methods where possible.
+                                    Install or repair the listed engines, then use Refresh hardware info. Native data and archive conversions do not need these engines.
                                 </p>
                             </div>
                         </div>

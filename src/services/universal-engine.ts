@@ -4,6 +4,8 @@ import {
     ConversionRequest,
 } from "../types";
 
+const cancelledJobs = new Set<string>();
+
 /**
  * BROWSER FALLBACK ENGINE
  * Provides limited, truthful local transformations in the browser when Tauri is unavailable.
@@ -20,9 +22,22 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
         } as unknown as T;
     }
 
-    if (cmd === "get_compatible_targets") {
+    if (cmd === "get_compatible_targets" || cmd === "get_smart_suggestions") {
         const ext = ((args?.inputExt as string) || "png").toLowerCase();
-        return getFullFormatCatalog(ext) as unknown as T;
+        const formats = getFullFormatCatalog(ext);
+        return (cmd === "get_smart_suggestions" ? formats.slice(0, 4) : formats) as unknown as T;
+    }
+
+    if (cmd === "validate_job") {
+        const input = String(args?.inputPath || "");
+        const extension = input.split(".").pop()?.toLowerCase() || "";
+        const supported = getFullFormatCatalog(extension).some(format => format.extension === String(args?.targetFormat || "").toLowerCase());
+        return { is_valid: supported, warnings: [], error: supported ? null : "This browser conversion is not supported.", file_info: null } as unknown as T;
+    }
+
+    if (cmd === "cancel_job") {
+        cancelledJobs.add(String(args?.jobId || ""));
+        return undefined as T;
     }
 
     if (cmd === "get_presets") {
@@ -36,6 +51,9 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
         const req = args?.request as ConversionRequest;
         const targetExt = req.target_format.toLowerCase();
         if (!req.rawFile) return { success: false, error: "Empty File" } as unknown as T;
+        if (req.rawFile.size > 64 * 1024 * 1024) return { success: false, error: "Browser conversion is limited to 64 MiB inputs." } as unknown as T;
+        const jobId = req.job_id || crypto.randomUUID();
+        cancelledJobs.delete(jobId);
 
         const startTime = Date.now();
         let finalBlob: Blob;
@@ -45,7 +63,7 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
             const textSource = ["txt", "md", "html"].includes(sourceExt);
 
             if (targetExt === "docx" && sourceExt === "pdf") {
-                finalBlob = await runRealPdfToDocx(req.rawFile);
+                finalBlob = await runRealPdfToDocx(req.rawFile, () => cancelledJobs.has(jobId));
             } else if (targetExt === "json" && sourceExt === "csv") {
                 finalBlob = new Blob([await runCsvToJson(req.rawFile)], { type: "application/json" });
             } else if (targetExt === "csv" && sourceExt === "json") {
@@ -66,11 +84,16 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
                 throw new Error("This conversion requires the File2File desktop app and its local conversion tools.");
             }
         } catch (e) {
+            cancelledJobs.delete(jobId);
             return { success: false, error: String(e) } as unknown as T;
         }
 
+        if (cancelledJobs.delete(jobId)) {
+            return { job_id: jobId, input_path: req.input_path, output_path: "", success: false, original_size_bytes: req.rawFile.size, converted_size_bytes: 0, elapsed_ms: Date.now() - startTime, error: "Conversion cancelled" } as unknown as T;
+        }
+
         return {
-            job_id: req.job_id || Math.random().toString(36).substring(2),
+            job_id: jobId,
             input_path: req.input_path,
             output_path: `file2file_output.${targetExt}`,
             success: true,
@@ -98,13 +121,13 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
     return [] as unknown as T;
 }
 
-async function runRealPdfToDocx(file: File): Promise<Blob> {
+async function runRealPdfToDocx(file: File, cancelled: () => boolean): Promise<Blob> {
     const pdfjsLib = await import("pdfjs-dist");
-    // @ts-ignore
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("../../node_modules/pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).href;
     const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
     let text = "";
     for (let i = 1; i <= pdf.numPages; i++) {
+        if (cancelled()) throw new Error("Conversion cancelled");
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
         // @ts-ignore
@@ -121,19 +144,45 @@ async function runRealPdfToDocx(file: File): Promise<Blob> {
 async function runRealImageTranscode(file: File, ext: string): Promise<Blob> {
     return new Promise((res, rej) => {
         const img = new Image();
+        const source = URL.createObjectURL(file);
         img.onload = () => {
+            if (img.width * img.height > 100_000_000) {
+                URL.revokeObjectURL(source);
+                rej("Image exceeds the 100 megapixel browser limit");
+                return;
+            }
             const canvas = document.createElement("canvas");
             canvas.width = img.width; canvas.height = img.height;
             const ctx = canvas.getContext("2d");
             ctx?.drawImage(img, 0, 0);
             const mime = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
-            canvas.toBlob(b => b ? res(b) : rej("Transcode Fail"), mime, 0.9);
+            canvas.toBlob(b => {
+                URL.revokeObjectURL(source);
+                b ? res(b) : rej("Transcode failed");
+            }, mime, 0.9);
         };
-        img.src = URL.createObjectURL(file);
+        img.onerror = () => { URL.revokeObjectURL(source); rej("Image decode failed"); };
+        img.src = source;
     });
 }
 
 async function runImageToPdf(file: File): Promise<Blob> {
+    const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+        const image = new Image();
+        const source = URL.createObjectURL(file);
+        image.onload = () => {
+            URL.revokeObjectURL(source);
+            resolve({ width: image.width, height: image.height });
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(source);
+            reject(new Error("Image decode failed"));
+        };
+        image.src = source;
+    });
+    if (dimensions.width * dimensions.height > 100_000_000) {
+        throw new Error("Image exceeds the 100 megapixel browser limit");
+    }
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF();
     const data = await new Promise<string>(r => {
@@ -153,7 +202,8 @@ async function runTextToPdf(file: File): Promise<Blob> {
 
 async function runTextExtraction(file: File, target: string): Promise<string> {
     const raw = await file.text();
-    if (target === "html") return `<html><body style="font-family:sans-serif;padding:2rem"><h3>${file.name}</h3><hr><p>${raw.replace(/\n/g, "<br>")}</p></body></html>`;
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char] || char));
+    if (target === "html") return `<html><body><h3>${escapeHtml(file.name)}</h3><hr><p>${escapeHtml(raw).replace(/\n/g, "<br>")}</p></body></html>`;
     return raw;
 }
 
@@ -183,13 +233,18 @@ async function runCsvToJson(file: File): Promise<string> {
                 current += char;
             }
         }
+        if (inQuotes) throw new Error("Malformed CSV: unterminated quoted field");
         result.push(current.trim());
         return result;
     };
 
     const headers = parseCsvLine(lines[0]);
+    if (headers.some(header => !header) || new Set(headers).size !== headers.length) {
+        throw new Error("CSV headers must be non-empty and unique");
+    }
     const data = lines.slice(1).map(line => {
         const values = parseCsvLine(line);
+        if (values.length !== headers.length) throw new Error("Malformed CSV: row width does not match headers");
         const obj: any = {};
         headers.forEach((header, i) => {
             if (header) obj[header] = values[i] || "";
@@ -202,7 +257,9 @@ async function runCsvToJson(file: File): Promise<string> {
 async function runJsonToCsv(file: File): Promise<string> {
     const text = await file.text();
     const data = JSON.parse(text);
-    if (!Array.isArray(data) || data.length === 0) return "";
+    if (!Array.isArray(data) || data.length === 0 || data.some(item => typeof item !== "object" || item === null || Array.isArray(item))) {
+        throw new Error("JSON-to-CSV requires a non-empty array of objects");
+    }
 
     // Collect all unique keys for headers
     const headersSet = new Set<string>();
@@ -215,19 +272,18 @@ async function runJsonToCsv(file: File): Promise<string> {
     const headers = Array.from(headersSet).sort();
     if (headers.length === 0) return "";
 
+    const csvCell = (value: unknown): string => {
+        let text = String(value ?? "");
+        if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+        return /[,\n\r"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
     const csvLines = [
-        headers.join(","),
+        headers.map(csvCell).join(","),
         ...data.map(item => {
-            if (typeof item !== 'object' || item === null) return "";
             return headers.map(h => {
                 const val = item[h];
                 if (val === undefined || val === null) return "";
-                const s = String(val);
-                // Basic escaping: replace quotes with double quotes and wrap in quotes if contains comma/newline/quote
-                if (s.includes(",") || s.includes("\n") || s.includes("\"")) {
-                    return `"${s.replace(/"/g, "\"\"")}"`;
-                }
-                return s;
+                return csvCell(val);
             }).join(",");
         })
     ];
