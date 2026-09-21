@@ -9,7 +9,7 @@ use tempfile::tempdir;
 async fn test_transparency_preservation() {
     let app = tauri::test::mock_builder()
         .plugin(tauri_plugin_opener::init())
-        .build(tauri::generate_context!())
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .unwrap();
     let handle = app.handle();
 
@@ -76,7 +76,7 @@ async fn test_transparency_preservation() {
 async fn test_ffmpeg_metadata_preservation() {
     let app = tauri::test::mock_builder()
         .plugin(tauri_plugin_opener::init())
-        .build(tauri::generate_context!())
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .unwrap();
     let handle = app.handle();
 
@@ -149,7 +149,7 @@ async fn test_ffmpeg_metadata_preservation() {
 async fn test_pandoc_math_preservation() {
     let app = tauri::test::mock_builder()
         .plugin(tauri_plugin_opener::init())
-        .build(tauri::generate_context!())
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .unwrap();
     let handle = app.handle();
 

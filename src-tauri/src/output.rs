@@ -30,8 +30,27 @@ fn rename_directory_noreplace(source: &Path, destination: &Path) -> io::Result<(
     }
     #[cfg(windows)]
     {
-        fs::rename(source, destination)
-    } // Windows refuses to replace a directory.
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::MoveFileW;
+
+        let source: Vec<u16> = source
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let destination: Vec<u16> = destination
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        // Unlike std::fs::rename on Windows, MoveFileW has no replace flag and
+        // therefore preserves the same atomic no-clobber contract as Unix.
+        if unsafe { MoveFileW(source.as_ptr(), destination.as_ptr()) } != 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
 }
 
 /// Publish a completed artifact in the same filesystem. Never copy over a live destination.
@@ -54,7 +73,9 @@ pub fn publish(
         if metadata.len() == 0 {
             return Err("Conversion produced an empty file".into());
         }
-        fs::File::open(source)
+        fs::OpenOptions::new()
+            .write(true)
+            .open(source)
             .and_then(|f| f.sync_all())
             .map_err(|e| format!("Cannot flush output: {e}"))?;
     }

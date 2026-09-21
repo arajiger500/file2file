@@ -8,7 +8,7 @@ use tempfile::tempdir;
 async fn test_html_to_docx_table_preservation() {
     let app = tauri::test::mock_builder()
         .plugin(tauri_plugin_opener::init())
-        .build(tauri::generate_context!())
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .unwrap();
     let handle = app.handle();
 
