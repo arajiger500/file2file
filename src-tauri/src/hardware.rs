@@ -47,7 +47,6 @@ pub async fn detect_hardware_capabilities(app: Option<tauri::AppHandle>) -> Hard
 
     #[cfg(target_os = "macos")]
     {
-        gpu_vendor = Some("Apple Silicon / Metal".to_string());
         detected_gpus.push("Apple VideoToolbox Framework".to_string());
     }
 
@@ -118,6 +117,9 @@ pub async fn detect_hardware_capabilities(app: Option<tauri::AppHandle>) -> Hard
     }
 
     if has_videotoolbox {
+        if gpu_vendor.is_none() {
+            gpu_vendor = Some("Apple VideoToolbox".to_string());
+        }
         available_encoders.push(EncoderProfile {
             id: "h264_videotoolbox".to_string(),
             name: "Apple VideoToolbox H.264".to_string(),

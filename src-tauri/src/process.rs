@@ -6,7 +6,9 @@ use tokio::process::Command;
 use tokio::sync::watch;
 
 #[cfg(windows)]
-struct WindowsJob(windows_sys::Win32::Foundation::HANDLE);
+// Store the owned Win32 handle as an integer so this guard can move with the
+// async task. Kernel handles are process-wide and CloseHandle is thread-safe.
+struct WindowsJob(isize);
 
 #[cfg(windows)]
 impl WindowsJob {
@@ -47,14 +49,18 @@ impl WindowsJob {
                 std::io::Error::last_os_error()
             ));
         }
-        Ok(Self(job))
+        Ok(Self(job as isize))
     }
 }
 
 #[cfg(windows)]
 impl Drop for WindowsJob {
     fn drop(&mut self) {
-        unsafe { windows_sys::Win32::Foundation::CloseHandle(self.0) };
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(
+                self.0 as windows_sys::Win32::Foundation::HANDLE,
+            )
+        };
     }
 }
 

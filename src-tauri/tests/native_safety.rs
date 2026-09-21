@@ -162,7 +162,10 @@ async fn skip_and_overwrite_are_explicit() {
         .await
         .unwrap();
     assert!(result.success);
-    assert_eq!(Path::new(&result.output_path), output);
+    assert_eq!(
+        Path::new(&result.output_path).canonicalize().unwrap(),
+        output.canonicalize().unwrap()
+    );
     assert!(fs::read_to_string(output).unwrap().contains("new: true"));
 }
 
