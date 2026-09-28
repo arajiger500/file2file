@@ -67,10 +67,10 @@ pub async fn detect_hardware_capabilities(app: Option<tauri::AppHandle>) -> Hard
         String::new()
     };
 
-    let has_nvenc = ffmpeg_output.contains("nvenc");
-    let has_qsv = ffmpeg_output.contains("qsv");
-    let has_amf = ffmpeg_output.contains("h264_vaapi");
-    let has_videotoolbox = ffmpeg_output.contains("videotoolbox");
+    let has_nvenc = ffmpeg_output.contains("h264_nvenc");
+    let has_qsv = ffmpeg_output.contains("h264_qsv");
+    let has_amf = ffmpeg_output.contains("h264_amf");
+    let has_videotoolbox = ffmpeg_output.contains("h264_videotoolbox");
 
     if has_nvenc {
         gpu_vendor = Some("NVIDIA".to_string());
@@ -105,14 +105,14 @@ pub async fn detect_hardware_capabilities(app: Option<tauri::AppHandle>) -> Hard
 
     if has_amf {
         if gpu_vendor.is_none() {
-            gpu_vendor = Some("AMD / VA-API".to_string());
+            gpu_vendor = Some("AMD".to_string());
         }
         available_encoders.push(EncoderProfile {
-            id: "h264_vaapi".to_string(),
-            name: "VA-API / AMF H.264".to_string(),
+            id: "h264_amf".to_string(),
+            name: "AMD AMF H.264".to_string(),
             codec: "h264".to_string(),
             is_hardware: true,
-            description: "Hardware accelerated encoding via AMD/VA-API pipeline".to_string(),
+            description: "Hardware accelerated encoding via AMD AMF".to_string(),
         });
     }
 

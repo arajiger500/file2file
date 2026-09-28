@@ -118,14 +118,15 @@ impl Registry {
                 if from == to {
                     continue;
                 }
-                let lossless = ["flac", "wav"].contains(&to);
+                let target_is_lossless = ["flac", "wav"].contains(&to);
+                let lossless = ["flac", "wav"].contains(&from) && target_is_lossless;
                 caps.push(ConversionCapability {
                     from_ext: from.to_string(),
                     to_ext: to.to_string(),
                     category: FileCategory::Audio,
                     engine: ConversionEngine::FFmpeg,
                     sidecar_requirement: Some("ffmpeg".to_string()),
-                    subcategory: if lossless {
+                    subcategory: if target_is_lossless {
                         "Lossless Audio".to_string()
                     } else {
                         "Compressed Audio".to_string()
@@ -133,11 +134,24 @@ impl Registry {
                     is_lossless: lossless,
                     recommended_for: if lossless {
                         vec!["Archival".to_string(), "Master Quality".to_string()]
+                    } else if target_is_lossless {
+                        vec!["Editing".to_string(), "Compatibility".to_string()]
                     } else {
                         vec!["Everyday Listening".to_string(), "Portability".to_string()]
                     },
-                    fidelity_note: None,
-                    limitations: vec![],
+                    fidelity_note: if target_is_lossless && !lossless {
+                        Some(
+                            "Lossless encoding cannot restore detail already lost in the source"
+                                .to_string(),
+                        )
+                    } else {
+                        None
+                    },
+                    limitations: if target_is_lossless && !lossless {
+                        vec!["The output is larger but source quality is unchanged".to_string()]
+                    } else {
+                        vec![]
+                    },
                 });
             }
         }
@@ -163,7 +177,8 @@ impl Registry {
                 let engine = ConversionEngine::ImageMagick;
                 let sidecar = "magick";
 
-                let lossless = ["png", "bmp", "tiff"].contains(&to);
+                let lossless =
+                    ["png", "bmp", "tiff"].contains(&from) && ["png", "bmp", "tiff"].contains(&to);
                 let is_vector = from == "svg";
                 caps.push(ConversionCapability {
                     from_ext: from.to_string(),

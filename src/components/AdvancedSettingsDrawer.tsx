@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { X } from "lucide-react";
 import { AdvancedSettings, HardwareInfo } from "../types";
 
@@ -17,6 +17,15 @@ export const AdvancedSettingsDrawer: React.FC<AdvancedSettingsDrawerProps> = ({
     onChangeSettings,
     hardware,
 }) => {
+    useEffect(() => {
+        if (!isOpen) return;
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     const updateSetting = <K extends keyof AdvancedSettings>(
@@ -43,10 +52,10 @@ export const AdvancedSettingsDrawer: React.FC<AdvancedSettingsDrawerProps> = ({
         <div className="fixed inset-0 z-50 flex justify-end">
             <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px]" onClick={onClose} />
 
-            <div className="relative w-full max-w-[400px] bg-surface border-l border-border h-full flex flex-col z-10 shadow-2xl">
+            <div role="dialog" aria-modal="true" aria-labelledby="settings-title" className="relative w-full max-w-[400px] bg-surface border-l border-border h-full flex flex-col z-10 shadow-2xl">
                 <div className="h-[56px] px-6 border-b border-border bg-surface flex items-center justify-between">
-                    <h2 className="text-[15px] font-semibold text-text-primary">Settings</h2>
-                    <button onClick={onClose} className="p-2 -mr-2 text-text-muted hover:text-text-primary transition-colors">
+                    <h2 id="settings-title" className="text-[15px] font-semibold text-text-primary">Settings</h2>
+                    <button onClick={onClose} aria-label="Close settings" className="p-2 -mr-2 text-text-muted hover:text-text-primary transition-colors">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -103,6 +112,9 @@ export const AdvancedSettingsDrawer: React.FC<AdvancedSettingsDrawerProps> = ({
                             <button
                                 onClick={() => updateSetting("hardwareAccel", !settings.hardwareAccel)}
                                 disabled={!hardware?.hardware_acceleration_supported}
+                                role="switch"
+                                aria-checked={settings.hardwareAccel}
+                                aria-label="Hardware acceleration"
                                 className={`w-9 h-5 rounded-full transition-all relative ${
                                     settings.hardwareAccel ? "bg-accent" : "bg-border"
                                 }`}
@@ -134,7 +146,7 @@ export const AdvancedSettingsDrawer: React.FC<AdvancedSettingsDrawerProps> = ({
                                 onChange={(e) => updateSetting("maxParallelJobs", parseInt(e.target.value))}
                                 className="input-field w-full h-[38px] cursor-pointer"
                             >
-                                {[1, 2, 4, 8, 16].map((n) => (
+                                {[1, 2, 3, 4].map((n) => (
                                     <option key={n} value={n}>{n} concurrent jobs</option>
                                 ))}
                             </select>
@@ -170,10 +182,13 @@ export const AdvancedSettingsDrawer: React.FC<AdvancedSettingsDrawerProps> = ({
                         <div className="flex items-center justify-between">
                             <div className="space-y-0.5">
                                 <label className="text-[13px] font-medium text-text-secondary">Remove metadata</label>
-                                <p className="text-tiny text-text-muted">Strip GPS and device tags</p>
+                                <p className="text-tiny text-text-muted">Strip supported media and image metadata</p>
                             </div>
                             <button
                                 onClick={() => updateSetting("stripMetadata", !settings.stripMetadata)}
+                                role="switch"
+                                aria-checked={settings.stripMetadata}
+                                aria-label="Remove metadata"
                                 className={`w-9 h-5 rounded-full transition-all relative ${
                                     settings.stripMetadata ? "bg-accent" : "bg-border"
                                 }`}

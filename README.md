@@ -4,7 +4,7 @@
 >
 > Convert documents, images, audio, video and structured data without uploading your files to a cloud service.
 
-[![Version](https://img.shields.io/badge/version-0.2.1-informational)](https://github.com/arajiger500/file2file/releases)
+[![Version](https://img.shields.io/badge/version-0.2.2-informational)](https://github.com/arajiger500/file2file/releases)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![Rust](https://img.shields.io/badge/backend-Rust-000000?logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![React](https://img.shields.io/badge/frontend-React-61DAFB?logo=react&logoColor=111)](https://react.dev/)
@@ -23,7 +23,7 @@ Each tagged release targets:
 
 [Open the latest releases](https://github.com/arajiger500/file2file/releases)
 
-The release workflow builds each package on a native GitHub-hosted runner. The already-published v0.2.0 release predates this packaging contract; v0.2.1 is the first release prepared by the hardened workflow.
+The release workflow builds each package on a native GitHub-hosted runner. The already-published v0.2.0 release predates this packaging contract; releases from v0.2.1 onward use the hardened workflow.
 
 ### Installation
 
@@ -98,13 +98,15 @@ The DEB package declares the main runtime packages it needs. AppImage users shou
 - ImageMagick
 - Poppler utilities
 
-The Engine Health panel shows which engines File2File can currently see. Restart the application or use the refresh control after changing `PATH` or the application-data `bin/` directory.
+The Engine Health panel shows which engines File2File can currently see. Formats whose required engine is missing or unusable are disabled with the specific missing dependency. Restart the application or use the refresh control after changing `PATH` or the application-data `bin/` directory.
 
 ## Features
 
 ### Batch conversion
 
-Drop multiple files for a bounded batch. Selecting or dropping a directory creates one folder-to-ZIP job; links, junctions and special files are rejected.
+Drop multiple files for a bounded batch. Mixed batches only offer output formats supported by every selected input, preventing avoidable per-file failures. Before conversion, File2File performs a bounded, cancellable readiness check and shows blocked files, fidelity warnings, and media details without starting conversion work. Results default to each source folder, or a desktop batch can be routed to one explicitly selected output directory. Selecting or dropping a directory creates one folder-to-ZIP job; links, junctions and special files are rejected.
+
+Completed batches provide a copyable plain-text report for support or troubleshooting. A small recent-conversion history is stored only in the application's local browser storage and can be cleared from the interface; output file contents are never stored there.
 
 ### Smart format selection
 
@@ -121,6 +123,8 @@ Depending on the conversion:
 - audio bitrate
 - output collision policy
 - retry/cancel handling
+
+Metadata removal is implemented for FFmpeg media and ImageMagick image routes. Formats and document engines that do not expose a reliable stripping operation are not represented as having guaranteed metadata removal.
 
 ### Validation and failure handling
 
@@ -140,7 +144,7 @@ Archives reject traversal, absolute/drive/UNC paths, links, special files, dupli
 
 - PDF conversion is text/layout extraction; complex layout, fonts, forms and images may shift or be lost.
 - Document conversion is semantic rather than pixel-perfect and may change styles or metadata.
-- Structured conversions use the first XLSX worksheet. CSV has no native types; numeric-looking values can change type, while identifiers with leading zeroes remain strings. CSV output prefixes formula-like cells with an apostrophe to prevent spreadsheet formula execution.
+- Structured conversions use the first XLSX worksheet and report that limitation before and after conversion. CSV has no native types; numeric-looking values can change type, while identifiers with leading zeroes remain strings. CSV output prefixes formula-like cells with an apostrophe to prevent spreadsheet formula execution.
 - Image conversion to JPEG flattens transparency onto white. Media conversion is lossy unless the selected codec/format is lossless.
 - ZIP/TAR conversion intentionally omits links and platform-specific special files.
 
@@ -227,8 +231,8 @@ Release CI additionally produces the platform installers/packages.
 Keep the npm, Cargo and Tauri versions identical, merge the version commit, then push a new tag matching that version:
 
 ```bash
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.2.2
+git push origin v0.2.2
 ```
 
 The release workflow builds the following native targets:
@@ -254,4 +258,4 @@ See [LICENSE](./LICENSE).
 
 ---
 
-**File2File v0.2.1** — local conversion, explicit engines, predictable packaging.
+**File2File v0.2.2** — local conversion, explicit engines, predictable packaging.

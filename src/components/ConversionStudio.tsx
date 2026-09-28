@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { ArrowLeft, Loader2, Download, AlertCircle, ExternalLink, RotateCcw, StopCircle, CheckCircle2 } from "lucide-react";
-import { FileItem, FormatOption, AdvancedSettings, ConversionResult, HardwareInfo } from "../types";
+import { ArrowLeft, Loader2, Download, AlertCircle, ExternalLink, RotateCcw, StopCircle, CheckCircle2, FolderOpen, X, ClipboardCopy, RefreshCw } from "lucide-react";
+import { FileItem, FormatOption, AdvancedSettings, ConversionResult, HardwareInfo, BatchValidationItem } from "../types";
 import { api, downloadFile, isTauri } from "../services/api";
 
 interface ConversionStudioProps {
@@ -30,15 +30,62 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
     const [startTime, setStartTime] = useState<number | null>(null);
     const [elapsedTime, setElapsedTime] = useState<number>(0);
     const [activeWorkerCount, setActiveWorkerCount] = useState<number>(0);
+    const [outputDirectory, setOutputDirectory] = useState<string | null>(null);
+    const [preflightItems, setPreflightItems] = useState<BatchValidationItem[]>([]);
+    const [preflightStatus, setPreflightStatus] = useState<"loading" | "ready" | "error">("loading");
+    const [preflightError, setPreflightError] = useState<string | null>(null);
+    const [preflightNonce, setPreflightNonce] = useState(0);
+    const [reportCopied, setReportCopied] = useState(false);
 
     const activeJobIdsRef = useRef<Set<string>>(new Set());
+    const validationJobIdRef = useRef<string | null>(null);
     const isCancelledRef = useRef<boolean>(false);
     const blobUrlsRef = useRef<Set<string>>(new Set());
+    const reportCopiedTimerRef = useRef<number | null>(null);
 
     useEffect(() => () => {
         blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
         blobUrlsRef.current.clear();
+        if (reportCopiedTimerRef.current !== null) {
+            window.clearTimeout(reportCopiedTimerRef.current);
+        }
     }, []);
+
+    const preflightKey = useMemo(
+        () => JSON.stringify([format.extension, ...files.map(file => file.path)]),
+        [files, format.extension],
+    );
+
+    useEffect(() => {
+        let disposed = false;
+        const jobId = crypto.randomUUID();
+        validationJobIdRef.current = jobId;
+        setPreflightStatus("loading");
+        setPreflightError(null);
+        setPreflightItems([]);
+
+        void api.validateJobs(jobId, files.map(file => file.path), format.extension)
+            .then(items => {
+                if (disposed) return;
+                validationJobIdRef.current = null;
+                setPreflightItems(items);
+                setPreflightStatus("ready");
+            })
+            .catch(error => {
+                if (disposed) return;
+                validationJobIdRef.current = null;
+                setPreflightError(String(error));
+                setPreflightStatus("error");
+            });
+
+        return () => {
+            disposed = true;
+            if (validationJobIdRef.current === jobId) {
+                validationJobIdRef.current = null;
+                void api.cancelJob(jobId).catch(() => undefined);
+            }
+        };
+    }, [preflightKey, preflightNonce]);
 
     // Live elapsed timer
     useEffect(() => {
@@ -51,10 +98,25 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
 
     const completedCount = files.filter(f => f.status === "completed" || f.status === "error" || f.status === "cancelled").length;
     const successfulCount = results.filter(r => r.success).length;
-    const failedCount = results.filter(r => !r.success).length;
+    const cancelledCount = results.filter(r => !r.success && r.error?.toLowerCase().includes("cancelled")).length;
+    const failedCount = results.filter(r => !r.success && !r.error?.toLowerCase().includes("cancelled")).length;
     const progress = files.length > 0 ? (completedCount / files.length) * 100 : 0;
+    const preflightReadyCount = preflightItems.filter(item => item.result.is_valid).length;
+    const preflightBlockedCount = preflightItems.length - preflightReadyCount;
+    const preflightWarningCount = preflightItems.reduce((count, item) => count + item.result.warnings.length, 0);
+    const preflightByPath = useMemo(
+        () => new Map(preflightItems.map(item => [item.input_path, item.result])),
+        [preflightItems],
+    );
+    const orderedResults = useMemo(() => {
+        const fileOrder = new Map(files.map((file, index) => [file.path, index]));
+        return [...results].sort(
+            (left, right) => (fileOrder.get(left.input_path) ?? Number.MAX_SAFE_INTEGER) -
+                (fileOrder.get(right.input_path) ?? Number.MAX_SAFE_INTEGER),
+        );
+    }, [files, results]);
 
-    const runBatch = async (filesToProcess: FileItem[]) => {
+    const runBatch = async (filesToProcess: FileItem[], suppliedValidation?: BatchValidationItem[]) => {
         if (filesToProcess.length === 0 || runningRef.current) return;
         runningRef.current = true;
         setIsCancelling(false);
@@ -67,43 +129,98 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
         setStartTime(Date.now());
 
         const validatedQueue: FileItem[] = [];
+        const terminalPaths = new Set<string>();
+        const validationWarnings = new Map<string, string[]>();
 
-        for (const file of filesToProcess) {
-            if (isCancelledRef.current) break;
+        const cancelledResult = (file: FileItem): ConversionResult => ({
+            job_id: crypto.randomUUID(),
+            input_path: file.path,
+            output_path: "",
+            success: false,
+            original_size_bytes: file.size,
+            converted_size_bytes: 0,
+            elapsed_ms: 0,
+            error: "Conversion cancelled",
+        });
+
+        let validationItems = suppliedValidation;
+        if (!validationItems) {
+            const validationJobId = crypto.randomUUID();
+            activeJobIdsRef.current.add(validationJobId);
             try {
-                const validation = await api.validateJob(file.path, format.extension);
-                if (!validation.is_valid) {
-                    const fail: ConversionResult = {
-                        job_id: crypto.randomUUID(),
-                        input_path: file.path,
-                        output_path: "",
-                        success: false,
-                        original_size_bytes: file.size,
-                        converted_size_bytes: 0,
-                        elapsed_ms: 0,
-                        error: validation.error || "Validation pre-flight failed",
-                    };
-                    onUpdateFileStatus(file.id, "error", fail);
-                    setResults(prev => [...prev.filter(r => r.input_path !== file.path), fail]);
-                } else {
-                    validatedQueue.push(file);
-                }
+                validationItems = await api.validateJobs(
+                    validationJobId,
+                    filesToProcess.map(file => file.path),
+                    format.extension,
+                );
             } catch (error) {
-                const fail: ConversionResult = {
-                    job_id: crypto.randomUUID(), input_path: file.path, output_path: "",
-                    success: false, original_size_bytes: file.size, converted_size_bytes: 0,
-                    elapsed_ms: 0, error: `Validation could not run: ${String(error)}`,
-                };
-                onUpdateFileStatus(file.id, "error", fail);
-                setResults(prev => [...prev.filter(result => result.input_path !== file.path), fail]);
+                if (isCancelledRef.current || String(error).toLowerCase().includes("cancelled")) {
+                    const cancelled = filesToProcess.map(file => {
+                        const result = cancelledResult(file);
+                        onUpdateFileStatus(file.id, "cancelled", result);
+                        return result;
+                    });
+                    setResults(prev => [
+                        ...prev.filter(result => !cancelled.some(item => item.input_path === result.input_path)),
+                        ...cancelled,
+                    ]);
+                } else {
+                    setOperationError(`Batch readiness check failed: ${String(error)}`);
+                    filesToProcess.forEach(file => onUpdateFileStatus(
+                        file.id,
+                        file.result?.error?.toLowerCase().includes("cancelled") ? "cancelled" : "error",
+                        file.result,
+                    ));
+                }
+                setIsConverting(false);
+                setIsCancelling(false);
+                runningRef.current = false;
+                activeJobIdsRef.current.delete(validationJobId);
+                return;
             }
+            activeJobIdsRef.current.delete(validationJobId);
+        }
+
+        const validationByPath = new Map(validationItems.map(item => [item.input_path, item.result]));
+        for (const file of filesToProcess) {
+            const validation = validationByPath.get(file.path);
+            if (validation?.is_valid) {
+                validatedQueue.push(file);
+                validationWarnings.set(file.path, validation.warnings);
+                continue;
+            }
+            const fail: ConversionResult = {
+                job_id: crypto.randomUUID(),
+                input_path: file.path,
+                output_path: "",
+                success: false,
+                original_size_bytes: file.size,
+                converted_size_bytes: 0,
+                elapsed_ms: 0,
+                error: validation?.error || "Validation pre-flight failed",
+            };
+            terminalPaths.add(file.path);
+            onUpdateFileStatus(file.id, "error", fail);
+            setResults(prev => [...prev.filter(result => result.input_path !== file.path), fail]);
         }
 
         if (validatedQueue.length === 0 || isCancelledRef.current) {
+            if (isCancelledRef.current) {
+                const cancelled = filesToProcess
+                    .filter(file => !terminalPaths.has(file.path))
+                    .map(file => {
+                        const result = cancelledResult(file);
+                        onUpdateFileStatus(file.id, "cancelled", result);
+                        return result;
+                    });
+                setResults(prev => [
+                    ...prev.filter(result => !cancelled.some(item => item.input_path === result.input_path)),
+                    ...cancelled,
+                ]);
+            }
             setIsConverting(false);
             runningRef.current = false;
             setIsCancelling(false);
-            if (isCancelledRef.current) filesToProcess.forEach(f => onUpdateFileStatus(f.id, "cancelled"));
             return;
         }
 
@@ -134,6 +251,7 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                 const res = await api.startConversion({
                     job_id: jobId,
                     input_path: file.path,
+                    output_dir: outputDirectory || undefined,
                     target_format: format.extension,
                     crf: settings.crf,
                     resolution: settings.resolution,
@@ -144,6 +262,8 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                     collision_policy: settings.collisionPolicy,
                     rawFile: file.rawFile,
                 });
+                res.warnings = [...(validationWarnings.get(file.path) || []), ...(res.warnings || [])]
+                    .filter((warning, index, all) => all.indexOf(warning) === index);
                 if (res.download_url) blobUrlsRef.current.add(res.download_url);
                 onUpdateFileStatus(file.id, res.success ? "completed" : res.error?.toLowerCase().includes("cancelled") ? "cancelled" : "error", res);
                 return res;
@@ -176,7 +296,17 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
         });
 
         await Promise.all(workers);
-        if (isCancelledRef.current) validatedQueue.slice(nextIndex).forEach(f => onUpdateFileStatus(f.id, "cancelled"));
+        if (isCancelledRef.current) {
+            const cancelled = validatedQueue.slice(nextIndex).map(file => {
+                const result = cancelledResult(file);
+                onUpdateFileStatus(file.id, "cancelled", result);
+                return result;
+            });
+            setResults(prev => [
+                ...prev.filter(result => !cancelled.some(item => item.input_path === result.input_path)),
+                ...cancelled,
+            ]);
+        }
         runningRef.current = false;
         setIsCancelling(false);
         setIsConverting(false);
@@ -188,7 +318,8 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
         blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
         blobUrlsRef.current.clear();
         setResults([]);
-        void runBatch(files);
+        if (preflightStatus !== "ready") return;
+        void runBatch(files, preflightItems);
     };
 
     const handleCancel = async () => {
@@ -204,7 +335,7 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
     const handleRetryFailed = () => {
         const failedFiles = files.filter(f => f.status === "error" || f.status === "cancelled");
         if (failedFiles.length > 0) {
-            runBatch(failedFiles);
+            void runBatch(failedFiles);
         }
     };
 
@@ -217,7 +348,47 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
         }
     };
 
-    const done = results.length === files.length && !isConverting && files.length > 0;
+    const handleChooseOutputDirectory = async () => {
+        try {
+            const selected = await api.chooseOutputDirectory();
+            if (selected) setOutputDirectory(selected);
+        } catch (error) {
+            setOperationError(`Output folder could not be selected: ${String(error)}`);
+        }
+    };
+
+    const handleCopyReport = async () => {
+        const lines = [
+            "File2File conversion report",
+            `Target: ${format.extension.toUpperCase()}`,
+            `Summary: ${successfulCount} successful, ${failedCount} failed, ${cancelledCount} cancelled`,
+            `Elapsed: ${(elapsedTime / 1000).toFixed(1)} seconds`,
+            "",
+            ...orderedResults.map(result => {
+                const inputName = result.input_path.split(/[\\/]/).pop() || result.input_path;
+                const status = result.success ? "OK" : result.error?.toLowerCase().includes("cancelled") ? "CANCELLED" : "FAILED";
+                const details = result.success
+                    ? result.output_path
+                    : (result.error || "Unknown error").replace(/\s+/g, " ");
+                return `[${status}] ${inputName}: ${details}`;
+            }),
+        ];
+        try {
+            await navigator.clipboard.writeText(lines.join("\n"));
+            setReportCopied(true);
+            if (reportCopiedTimerRef.current !== null) {
+                window.clearTimeout(reportCopiedTimerRef.current);
+            }
+            reportCopiedTimerRef.current = window.setTimeout(() => {
+                reportCopiedTimerRef.current = null;
+                setReportCopied(false);
+            }, 2000);
+        } catch (error) {
+            setOperationError(`Conversion report could not be copied: ${String(error)}`);
+        }
+    };
+
+    const done = completedCount === files.length && !isConverting && files.length > 0;
 
     const totalSavedBytes = useMemo(() => {
         return results.reduce((acc, curr) => {
@@ -308,19 +479,78 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                                 </div>
                             </div>
 
+                            <div className="flex items-center justify-between gap-4 px-4 py-3 bg-surface border border-border rounded-lg">
+                                <div className="min-w-0">
+                                    <div className="text-tiny font-bold text-text-muted uppercase tracking-widest">Batch readiness</div>
+                                    {preflightStatus === "loading" && (
+                                        <div className="text-[12px] text-text-secondary flex items-center gap-2 mt-1">
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+                                            Inspecting {files.length} input{files.length === 1 ? "" : "s"}…
+                                        </div>
+                                    )}
+                                    {preflightStatus === "ready" && (
+                                        <div className="text-[12px] text-text-secondary mt-1">
+                                            <span className="text-success">{preflightReadyCount} ready</span>
+                                            {preflightBlockedCount > 0 && <span className="text-error"> · {preflightBlockedCount} blocked</span>}
+                                            {preflightWarningCount > 0 && <span className="text-warning"> · {preflightWarningCount} warning{preflightWarningCount === 1 ? "" : "s"}</span>}
+                                        </div>
+                                    )}
+                                    {preflightStatus === "error" && (
+                                        <div className="text-[12px] text-error mt-1 truncate" title={preflightError || undefined}>
+                                            Readiness check failed: {preflightError}
+                                        </div>
+                                    )}
+                                </div>
+                                {preflightStatus === "error" && (
+                                    <button onClick={() => setPreflightNonce(value => value + 1)} className="btn-secondary h-[34px] flex items-center gap-2 shrink-0">
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                        Check again
+                                    </button>
+                                )}
+                            </div>
+
+                            {isTauri() && (
+                                <div className="flex items-center justify-between gap-4 px-4 py-3 bg-surface border border-border rounded-lg">
+                                    <div className="min-w-0">
+                                        <div className="text-tiny font-bold text-text-muted uppercase tracking-widest">Output location</div>
+                                        <div className="text-[12px] text-text-secondary truncate" title={outputDirectory || undefined}>
+                                            {outputDirectory || "Alongside each source file"}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        {outputDirectory && (
+                                            <button onClick={() => setOutputDirectory(null)} className="p-2 text-text-muted hover:text-text-primary" aria-label="Use source folders">
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <button onClick={handleChooseOutputDirectory} className="btn-secondary h-[34px] flex items-center gap-2">
+                                            <FolderOpen className="w-4 h-4" />
+                                            Choose folder
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Execution Area */}
                             <div className="flex-1 flex flex-col items-center justify-center border border-border bg-surface-raised rounded-lg p-8">
                                 {!isConverting ? (
                                     <div className="text-center space-y-6 max-w-sm">
                                         <div className="space-y-1.5">
-                                            <h3 className="text-[17px] font-semibold text-text-primary">Ready to convert</h3>
-                                            <p className="text-[13px] text-text-muted">Process {files.length} files locally and securely.</p>
+                                            <h3 className="text-[17px] font-semibold text-text-primary">
+                                                {preflightStatus === "loading" ? "Checking inputs" : preflightReadyCount > 0 ? "Ready to convert" : "No convertible inputs"}
+                                            </h3>
+                                            <p className="text-[13px] text-text-muted">
+                                                {preflightStatus === "ready"
+                                                    ? `${preflightReadyCount} of ${files.length} files can be processed locally.`
+                                                    : "File contents and required streams are checked before work begins."}
+                                            </p>
                                         </div>
                                         <button
                                             onClick={handleRun}
+                                            disabled={preflightStatus !== "ready" || preflightReadyCount === 0}
                                             className="btn-primary w-full h-[48px] text-[15px] font-semibold shadow-sm"
                                         >
-                                            Start conversion
+                                            {preflightStatus === "loading" ? "Checking readiness…" : `Convert ${preflightReadyCount} file${preflightReadyCount === 1 ? "" : "s"}`}
                                         </button>
                                     </div>
                                 ) : (
@@ -350,19 +580,25 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                             {/* Completion Header */}
                             <div className="flex items-center justify-between">
                                 <div className="space-y-1">
-                                    <h2 className="text-[22px] font-semibold text-text-primary tracking-tight">Conversion complete</h2>
+                                    <h2 className="text-[22px] font-semibold text-text-primary tracking-tight">
+                                        {cancelledCount > 0 ? "Batch stopped" : "Conversion complete"}
+                                    </h2>
                                     <p className="text-[13px] text-text-secondary">
-                                        {successfulCount} successful · {failedCount} failed · {(elapsedTime / 1000).toFixed(1)}s total
+                                        {successfulCount} successful · {failedCount} failed{cancelledCount > 0 ? ` · ${cancelledCount} cancelled` : ""} · {(elapsedTime / 1000).toFixed(1)}s total
                                     </p>
                                 </div>
                                 <div className="flex gap-2">
-                                    {failedCount > 0 && (
+                                    <button onClick={handleCopyReport} className="btn-secondary flex items-center gap-1.5">
+                                        <ClipboardCopy className="w-3.5 h-3.5" />
+                                        <span>{reportCopied ? "Copied" : "Copy report"}</span>
+                                    </button>
+                                    {failedCount + cancelledCount > 0 && (
                                         <button
                                             onClick={handleRetryFailed}
                                             className="btn-secondary flex items-center gap-1.5 text-warning"
                                         >
                                             <RotateCcw className="w-3.5 h-3.5" />
-                                            <span>Retry Failed</span>
+                                            <span>Retry unfinished</span>
                                         </button>
                                     )}
                                     <button onClick={onResetToUpload} className="btn-secondary">New conversion</button>
@@ -397,8 +633,8 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
 
                             {/* Results List */}
                             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                                {results.map((res) => (
-                                    <div key={res.job_id} className="h-[60px] flex items-center justify-between px-4 bg-surface border border-border rounded-lg group">
+                                {orderedResults.map((res) => (
+                                    <div key={res.job_id} className="min-h-[60px] flex items-center justify-between px-4 py-3 bg-surface border border-border rounded-lg group">
                                         <div className="flex items-center gap-3 truncate">
                                             {res.success ? (
                                                 <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
@@ -410,9 +646,14 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                                                     {res.output_path ? res.output_path.split(/[\\/]/).pop() : res.input_path.split(/[\\/]/).pop()}
                                                 </div>
                                                 {res.success ? (
-                                                    <div className="text-tiny font-mono text-text-muted uppercase">
-                                                        {formatBytes(res.original_size_bytes)} → {formatBytes(res.converted_size_bytes)} · {res.elapsed_ms}ms
-                                                    </div>
+                                                    <>
+                                                        <div className="text-tiny font-mono text-text-muted uppercase">
+                                                            {formatBytes(res.original_size_bytes)} → {formatBytes(res.converted_size_bytes)} · {res.elapsed_ms}ms
+                                                        </div>
+                                                        {res.warnings && res.warnings.length > 0 && (
+                                                            <div className="text-[10px] text-warning truncate max-w-md" title={res.warnings.join("\n")}>{res.warnings.join(" · ")}</div>
+                                                        )}
+                                                    </>
                                                 ) : (
                                                     <div className="text-tiny font-mono text-error uppercase truncate max-w-md">{res.error}</div>
                                                 )}
@@ -431,7 +672,9 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                                                     )}
                                                 </>
                                             ) : (
-                                                <span className="text-tiny text-error font-mono px-2 py-1 bg-error/10 rounded">Failed</span>
+                                                <span className={`text-tiny font-mono px-2 py-1 rounded ${res.error?.toLowerCase().includes("cancelled") ? "text-warning bg-warning/10" : "text-error bg-error/10"}`}>
+                                                    {res.error?.toLowerCase().includes("cancelled") ? "Cancelled" : "Failed"}
+                                                </span>
                                             )}
                                         </div>
                                     </div>
@@ -449,30 +692,49 @@ export const ConversionStudio: React.FC<ConversionStudioProps> = ({
                     </div>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-border">
-                        {files.map(f => (
-                            <div key={f.id} className="px-4 py-3 flex items-center justify-between transition-colors">
+                        {files.map(f => {
+                            const readiness = preflightByPath.get(f.path);
+                            const pendingLabel = preflightStatus === "loading"
+                                ? "checking"
+                                : readiness?.is_valid
+                                    ? readiness.warnings.length > 0 ? "warning" : "ready"
+                                    : "blocked";
+                            const displayStatus = f.status === "pending" && !isConverting ? pendingLabel : f.status;
+                            return <div key={f.id} className="px-4 py-3 flex items-center justify-between transition-colors" title={readiness?.error || readiness?.warnings.join("\n") || undefined}>
                                 <div className="flex items-center gap-2.5 truncate">
                                     <div className={`w-1.5 h-1.5 rounded-full ${
                                         f.status === "completed" ? "bg-success" :
                                         f.status === "converting" ? "bg-accent animate-pulse" :
                                         f.status === "error" ? "bg-error" :
                                         f.status === "cancelled" ? "bg-warning" :
+                                        displayStatus === "ready" ? "bg-success" :
+                                        displayStatus === "warning" ? "bg-warning" :
+                                        displayStatus === "blocked" ? "bg-error" :
                                         "bg-text-disabled"
                                     }`} />
-                                    <span className={`text-[12px] truncate ${f.status === "pending" ? "text-text-muted" : "text-text-primary"}`}>
-                                        {f.name}
-                                    </span>
+                                    <div className="min-w-0">
+                                        <div className={`text-[12px] truncate ${f.status === "pending" ? "text-text-muted" : "text-text-primary"}`}>{f.name}</div>
+                                        {readiness?.file_info && !isConverting && (
+                                            <div className="text-[10px] text-text-disabled font-mono">
+                                                {readiness.file_info.width > 0 ? `${readiness.file_info.width}×${readiness.file_info.height} · ` : ""}
+                                                {readiness.file_info.duration > 0 ? `${readiness.file_info.duration.toFixed(1)}s` : readiness.file_info.format_name}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <span className={`text-tiny font-mono uppercase ${
                                     f.status === "completed" ? "text-success" :
                                     f.status === "converting" ? "text-accent font-semibold" :
                                     f.status === "error" ? "text-error" :
+                                    displayStatus === "ready" ? "text-success" :
+                                    displayStatus === "warning" ? "text-warning" :
+                                    displayStatus === "blocked" ? "text-error" :
                                     "text-text-disabled"
                                 }`}>
-                                    {f.status}
+                                    {displayStatus}
                                 </span>
-                            </div>
-                        ))}
+                            </div>;
+                        })}
                     </div>
 
                     {isConverting && (

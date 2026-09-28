@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Search, ArrowLeft, AlertTriangle } from "lucide-react";
 import { FileItem, FormatOption, SidecarHealthReport } from "../types";
+import { getEngineIssue } from "../services/conversion-planning";
 
 interface FormatSelectionPageProps {
     files: FileItem[];
@@ -8,21 +9,13 @@ interface FormatSelectionPageProps {
     onSelectFormat: (format: FormatOption) => void;
     onBack: () => void;
     sidecars: SidecarHealthReport | null;
+    isLoading?: boolean;
+    error?: string | null;
 }
 
-export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availableFormats, onSelectFormat, onBack, sidecars }) => {
+export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ files, availableFormats, onSelectFormat, onBack, sidecars, isLoading = false, error = null }) => {
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState("All");
-
-    const isEngineMissing = (engine: string) => {
-        if (!sidecars) return false;
-        const e = engine.toLowerCase();
-        if (e.includes("ffmpeg") && !sidecars.ffmpeg?.available) return true;
-        if (e.includes("imagemagick") && !sidecars.imagemagick?.available) return true;
-        if (e.includes("pandoc") && !sidecars.pandoc?.available) return true;
-        if (e.includes("poppler") && (!sidecars.pdftotext?.available || !sidecars.pdftohtml?.available)) return true;
-        return false;
-    };
 
     const categories = useMemo(() => ["All", ...Array.from(new Set(availableFormats.map(f => f.subcategory)))], [availableFormats]);
 
@@ -41,7 +34,9 @@ export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availa
                     </button>
                     <div>
                         <h2 className="text-[24px] font-semibold text-text-primary tracking-tight">Choose output format</h2>
-                        <p className="text-[13px] text-text-secondary">{filtered.length} formats available</p>
+                        <p className="text-[13px] text-text-secondary">
+                            {files.length > 1 ? `${filtered.length} common formats for ${files.length} files` : `${filtered.length} formats available`}
+                        </p>
                     </div>
                 </div>
 
@@ -76,12 +71,20 @@ export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availa
 
             {/* Format Grid */}
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                {(error || (!isLoading && filtered.length === 0)) && (
+                    <div role="alert" className="border border-warning/40 bg-warning/10 rounded-lg p-5 text-[13px] text-warning">
+                        {error || "No compatible formats match this selection."}
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-10">
-                    {filtered.map(f => (
-                        <button
+                    {filtered.map(f => {
+                        const issue = getEngineIssue(f, sidecars);
+                        return <button
                             key={f.extension}
                             onClick={() => onSelectFormat(f)}
-                            className="group p-4 bg-surface border border-border rounded-lg hover:border-accent hover:bg-surface-raised text-left transition-all"
+                            disabled={Boolean(issue)}
+                            title={issue || undefined}
+                            className="group p-4 bg-surface border border-border rounded-lg hover:border-accent hover:bg-surface-raised text-left transition-all disabled:opacity-55 disabled:cursor-not-allowed disabled:hover:border-border"
                         >
                             <div className="flex items-center justify-between mb-3">
                                 <span className="text-[16px] font-mono font-bold text-text-primary group-hover:text-accent">
@@ -100,7 +103,7 @@ export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availa
                             <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-tiny font-mono text-text-disabled uppercase">{f.sidecar_engine}</span>
-                                    {isEngineMissing(f.sidecar_engine) && (
+                                    {issue && (
                                         <AlertTriangle className="w-3 h-3 text-warning"  />
                                     )}
                                 </div>
@@ -108,8 +111,9 @@ export const FormatSelectionPage: React.FC<FormatSelectionPageProps> = ({ availa
                                     <span className="text-tiny text-accent font-medium uppercase tracking-widest">Recommended</span>
                                 )}
                             </div>
-                        </button>
-                    ))}
+                            {issue && <p className="mt-2 text-[10px] leading-snug text-warning">{issue}</p>}
+                        </button>;
+                    })}
                 </div>
             </div>
         </div>

@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { QuickPreset, SidecarHealthReport } from "../types";
+import { isTauri } from "../services/api";
 
 interface QuickConvertersProps {
     presets: QuickPreset[];
@@ -13,6 +14,7 @@ export const QuickConverters: React.FC<QuickConvertersProps> = ({
     sidecars,
 }) => {
     const isEngineMissing = (preset: QuickPreset) => {
+        if (!isTauri()) return false;
         if (!sidecars) return false;
         if (preset.from_category === "document" && (!sidecars.pandoc?.available || !sidecars.pdftohtml?.available)) return true;
         if (preset.from_category === "image" && !sidecars.imagemagick?.available) return true;
@@ -30,6 +32,8 @@ export const QuickConverters: React.FC<QuickConvertersProps> = ({
                         <button
                             key={preset.id}
                             onClick={() => onSelectPreset(preset)}
+                            disabled={missing}
+                            title={missing ? "Required desktop conversion engine is unavailable" : preset.description}
                             className={`btn-secondary h-[40px] px-4 flex items-center gap-2 group border-border hover:border-accent ${
                                 missing ? "opacity-70 grayscale-[0.5]" : ""
                             }`}

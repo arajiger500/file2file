@@ -9,6 +9,7 @@ interface DropZoneProps {
     onRemoveFile: (id: string) => void;
     onClearFiles: () => void;
     onDirectConvert?: (format: FormatOption) => void;
+    compatibleFormats?: FormatOption[];
 }
 
 const detectCategory = (ext: string): FileCategory => {
@@ -24,23 +25,15 @@ const detectCategory = (ext: string): FileCategory => {
     return "unknown";
 };
 
-export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveFile, onClearFiles, onDirectConvert }) => {
+export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveFile, onClearFiles, onDirectConvert, compatibleFormats = [] }) => {
     const [scanError, setScanError] = useState<string | null>(null);
     const [isScanning, setIsScanning] = useState(false);
     const scanningRef = useRef(false);
     const addFilesRef = useRef(onAddFiles);
     addFilesRef.current = onAddFiles;
     const [isDragging, setIsDragging] = useState(false);
-    const [suggestions, setSuggestions] = useState<FormatOption[]>([]);
     const fileRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (files.length > 0) {
-            api.getSmartSuggestions(files[0].extension).then(setSuggestions).catch(() => setSuggestions([]));
-        } else {
-            setSuggestions([]);
-        }
-    }, [files]);
+    const suggestions = compatibleFormats.slice(0, 4);
 
     const processFiles = (raw: FileList | null) => {
         if (!raw) return;
@@ -121,7 +114,16 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
                     : "border-border bg-surface hover:border-border-strong hover:bg-surface-raised"
                 }`}
             >
-                <input type="file" ref={fileRef} multiple className="hidden" onChange={(e) => processFiles(e.target.files)} />
+                <input
+                    type="file"
+                    ref={fileRef}
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                        processFiles(event.target.files);
+                        event.currentTarget.value = "";
+                    }}
+                />
 
                 <div className="flex flex-col items-center gap-4">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center bg-surface-raised border border-border ${isDragging ? "text-accent" : "text-text-muted"}`}>
@@ -129,7 +131,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
                     </div>
                     <div className="text-center space-y-1">
                         <h3 className="text-[16px] font-semibold text-text-primary">Drop files here</h3>
-                        <p className="text-[13px] text-text-muted">or choose files / folders</p>
+                        <p className="text-[13px] text-text-muted">{isTauri() ? "or choose files / folders" : "or choose files"}</p>
                     </div>
                     <div className="flex gap-2 mt-2">
                         <button
@@ -140,14 +142,16 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
                         >
                             Choose Files
                         </button>
-                        <button
-                            disabled={isScanning}
-                            onClick={() => void handleSelectFiles("folder").catch(e => setScanError(String(e)))}
-                            className="btn-secondary h-[36px]"
-                            aria-label="Choose folder"
-                        >
-                            Choose Folder
-                        </button>
+                        {isTauri() && (
+                            <button
+                                disabled={isScanning}
+                                onClick={() => void handleSelectFiles("folder").catch(e => setScanError(String(e)))}
+                                className="btn-secondary h-[36px]"
+                                aria-label="Choose folder"
+                            >
+                                Choose Folder
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -191,6 +195,7 @@ export const DropZone: React.FC<DropZoneProps> = ({ files, onAddFiles, onRemoveF
                                     </div>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); onRemoveFile(f.id); }}
+                                        aria-label={`Remove ${f.name}`}
                                         className="p-2 text-text-muted hover:text-error transition-colors"
                                     >
                                         <X className="w-4 h-4" />

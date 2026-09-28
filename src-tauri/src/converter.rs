@@ -3,6 +3,7 @@ use crate::formats::{get_category_for_extension, FileCategory};
 use crate::registry::Registry;
 use crate::sidecar::{get_binary_command, spawn_and_track_simple};
 use calamine::{Reader, Xlsx};
+use futures::{stream, StreamExt};
 use rusqlite::Connection;
 use rust_xlsxwriter::Workbook;
 use serde::{Deserialize, Serialize};
@@ -73,6 +74,7 @@ pub struct ConversionResult {
 pub struct FileProbeResult {
     pub has_video: bool,
     pub has_audio: bool,
+    pub has_subtitle: bool,
     pub duration: f64,
     pub width: u32,
     pub height: u32,
@@ -87,9 +89,23 @@ pub struct ValidationResult {
     pub file_info: Option<FileProbeResult>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchValidationItem {
+    pub input_path: String,
+    pub result: ValidationResult,
+}
+
 pub async fn probe_file_info<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     path: &str,
+) -> Result<FileProbeResult, String> {
+    probe_file_info_cancellable(app, path, None).await
+}
+
+async fn probe_file_info_cancellable<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    path: &str,
+    cancellation: Option<tokio::sync::watch::Receiver<bool>>,
 ) -> Result<FileProbeResult, String> {
     let path = Path::new(path).canonicalize().map_err(|e| e.to_string())?;
     if !path.is_file() {
@@ -112,7 +128,7 @@ pub async fn probe_file_info<R: tauri::Runtime>(
         command,
         std::time::Duration::from_secs(15),
         4 * 1024 * 1024,
-        None,
+        cancellation,
     )
     .await?;
     if !output.success {
@@ -127,6 +143,7 @@ pub async fn probe_file_info<R: tauri::Runtime>(
         .ok_or("No streams found in file")?;
     let has_video = streams.iter().any(|s| s["codec_type"] == "video");
     let has_audio = streams.iter().any(|s| s["codec_type"] == "audio");
+    let has_subtitle = streams.iter().any(|s| s["codec_type"] == "subtitle");
 
     let format = &json["format"];
     let duration = format["duration"]
@@ -145,6 +162,7 @@ pub async fn probe_file_info<R: tauri::Runtime>(
     Ok(FileProbeResult {
         has_video,
         has_audio,
+        has_subtitle,
         duration,
         width,
         height,
@@ -156,6 +174,15 @@ pub async fn validate_conversion<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     input_path_str: &str,
     target_format: &str,
+) -> ValidationResult {
+    validate_conversion_cancellable(app, input_path_str, target_format, None).await
+}
+
+async fn validate_conversion_cancellable<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    input_path_str: &str,
+    target_format: &str,
+    cancellation: Option<tokio::sync::watch::Receiver<bool>>,
 ) -> ValidationResult {
     let path = Path::new(input_path_str);
     if !path.exists() {
@@ -190,12 +217,11 @@ pub async fn validate_conversion<R: tauri::Runtime>(
 
     let category = get_category_for_extension(&ext);
     let target_cat = get_category_for_extension(target_format);
-
-    let warnings = Vec::new();
+    let warnings = fidelity_warnings(&ext, target_format);
 
     // Probe media files
     if category == FileCategory::Video || category == FileCategory::Audio {
-        match probe_file_info(app, input_path_str).await {
+        match probe_file_info_cancellable(app, input_path_str, cancellation).await {
             Ok(info) => {
                 if target_cat == FileCategory::Audio && !info.has_audio {
                     return ValidationResult {
@@ -215,6 +241,18 @@ pub async fn validate_conversion<R: tauri::Runtime>(
                         is_valid: false,
                         warnings: vec![],
                         error: Some("The input contains no video stream.".to_string()),
+                        file_info: Some(info),
+                    };
+                }
+
+                if target_format.eq_ignore_ascii_case("srt") && !info.has_subtitle {
+                    return ValidationResult {
+                        is_valid: false,
+                        warnings,
+                        error: Some(
+                            "The input contains no embedded subtitle stream to extract."
+                                .to_string(),
+                        ),
                         file_info: Some(info),
                     };
                 }
@@ -243,6 +281,84 @@ pub async fn validate_conversion<R: tauri::Runtime>(
         error: None,
         file_info: None,
     }
+}
+
+pub async fn validate_batch<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    job_id: &str,
+    input_paths: Vec<String>,
+    target_format: &str,
+) -> Result<Vec<BatchValidationItem>, String> {
+    validate_batch_request(&input_paths, target_format)?;
+    if app.try_state::<crate::AppState>().is_none() {
+        app.manage(crate::AppState::default());
+    }
+    let state_holder = app.state::<crate::AppState>();
+    let state = state_holder.inner();
+    let _job = state.register(job_id)?;
+    let cancellation = state.subscribe(job_id)?;
+    let target_format = target_format.to_lowercase();
+    let app = app.clone();
+    let mut results = stream::iter(input_paths.into_iter().enumerate())
+        .map(|(index, input_path)| {
+            let app = app.clone();
+            let target_format = target_format.clone();
+            let cancellation = cancellation.clone();
+            async move {
+                let result = validate_conversion_cancellable(
+                    &app,
+                    &input_path,
+                    &target_format,
+                    Some(cancellation),
+                )
+                .await;
+                (index, BatchValidationItem { input_path, result })
+            }
+        })
+        .buffer_unordered(num_cpus::get().clamp(1, 4))
+        .collect::<Vec<_>>()
+        .await;
+    state.check(job_id)?;
+    results.sort_by_key(|(index, _)| *index);
+    Ok(results.into_iter().map(|(_, item)| item).collect())
+}
+
+fn validate_batch_request(input_paths: &[String], target_format: &str) -> Result<(), String> {
+    if input_paths.is_empty() {
+        return Err("A batch must contain at least one input".to_string());
+    }
+    if input_paths.len() > 256 {
+        return Err("Batch exceeds the 256-input safety limit".to_string());
+    }
+    if target_format.is_empty()
+        || target_format.len() > 16
+        || !target_format
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric())
+    {
+        return Err("Invalid target format".to_string());
+    }
+    Ok(())
+}
+
+fn fidelity_warnings(input_ext: &str, target_ext: &str) -> Vec<String> {
+    let mut warnings = Vec::new();
+    if input_ext.eq_ignore_ascii_case("xlsx") {
+        warnings.push("Only the first XLSX worksheet is converted.".to_string());
+    }
+    if input_ext.eq_ignore_ascii_case("pdf") && target_ext != "txt" {
+        warnings.push(
+            "PDF export reconstructs editable content; complex layout, forms, and fonts may change."
+                .to_string(),
+        );
+    }
+    if target_ext.eq_ignore_ascii_case("csv") {
+        warnings.push(
+            "CSV cannot preserve nested values or native types; formula-like cells are escaped for safety."
+                .to_string(),
+        );
+    }
+    warnings
 }
 
 pub async fn convert_single_file<R: tauri::Runtime>(
@@ -373,10 +489,11 @@ pub async fn convert_single_file<R: tauri::Runtime>(
     let category = get_category_for_extension(&input_ext);
     let target_category = get_category_for_extension(&target_ext);
 
+    let fidelity_warnings = fidelity_warnings(&input_ext, &target_ext);
     let execution_result = if input_ext == "pdf" {
         run_pdf_conversion(&app, state, &job_id, &input_path, &temp_output, &target_ext)
             .await
-            .map(|_| vec![])
+            .map(|_| fidelity_warnings.clone())
     } else if category == FileCategory::Data {
         let (input, output, from, to) = (
             input_path.clone(),
@@ -384,10 +501,13 @@ pub async fn convert_single_file<R: tauri::Runtime>(
             input_ext.clone(),
             target_ext.clone(),
         );
-        tokio::task::spawn_blocking(move || run_data_conversion_sync(&input, &output, &from, &to))
-            .await
-            .map_err(|e| e.to_string())?
-            .map(|_| vec![])
+        let cancellation = state.subscribe(&job_id)?;
+        tokio::task::spawn_blocking(move || {
+            run_data_conversion_sync(&input, &output, &from, &to, Some(&cancellation))
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map(|_| fidelity_warnings.clone())
     } else if category == FileCategory::Archive || input_ext == "folder" || input_ext == "directory"
     {
         let (input, output, from, to) = (
@@ -402,12 +522,19 @@ pub async fn convert_single_file<R: tauri::Runtime>(
         })
         .await
         .map_err(|e| e.to_string())?
-        .map(|_| vec![])
+        .map(|_| fidelity_warnings.clone())
     } else if category == FileCategory::Image || category == FileCategory::Vector {
         if target_ext == "pdf" || get_category_for_extension(&target_ext) == FileCategory::Image {
-            run_image_magick_conversion(&app, state, &job_id, &input_path, &temp_output)
-                .await
-                .map(|_| vec![])
+            run_image_magick_conversion(
+                &app,
+                state,
+                &job_id,
+                &input_path,
+                &temp_output,
+                req.strip_metadata,
+            )
+            .await
+            .map(|_| fidelity_warnings.clone())
         } else {
             run_pandoc_conversion(
                 &app,
@@ -418,7 +545,7 @@ pub async fn convert_single_file<R: tauri::Runtime>(
                 temp_dir.path(),
             )
             .await
-            .map(|_| vec![])
+            .map(|_| fidelity_warnings.clone())
         }
     } else if target_category == FileCategory::Document {
         run_pandoc_conversion(
@@ -430,7 +557,7 @@ pub async fn convert_single_file<R: tauri::Runtime>(
             temp_dir.path(),
         )
         .await
-        .map(|_| vec![])
+        .map(|_| fidelity_warnings.clone())
     } else {
         run_ffmpeg_conversion(
             &app,
@@ -442,6 +569,10 @@ pub async fn convert_single_file<R: tauri::Runtime>(
             &target_ext,
         )
         .await
+        .map(|mut warnings| {
+            warnings.extend(fidelity_warnings);
+            warnings
+        })
     };
 
     state.check(&job_id)?;
@@ -508,7 +639,7 @@ fn validate_request_parameters(
             "h264_nvenc",
             "hevc_nvenc",
             "h264_qsv",
-            "h264_vaapi",
+            "h264_amf",
             "h264_videotoolbox",
         ]
         .contains(&encoder)
@@ -638,6 +769,7 @@ async fn run_image_magick_conversion<R: tauri::Runtime>(
     job_id: &str,
     input: &Path,
     output: &Path,
+    strip_metadata: bool,
 ) -> Result<(), String> {
     let input_str = input.to_str().ok_or("Input path contains invalid UTF-8")?;
     let output_str = output
@@ -678,6 +810,10 @@ async fn run_image_magick_conversion<R: tauri::Runtime>(
         // Multi-resolution icon generation for Windows ICO
         args.push("-define".to_string());
         args.push("icon:auto-resize=256,128,64,48,32,16".to_string());
+    }
+
+    if strip_metadata {
+        args.push("-strip".to_string());
     }
 
     args.push(output_str.to_string());
@@ -1050,7 +1186,9 @@ fn run_data_conversion_sync(
     output: &Path,
     input_ext: &str,
     target_ext: &str,
+    cancellation: Option<&tokio::sync::watch::Receiver<bool>>,
 ) -> Result<(), String> {
+    check_data_cancellation(cancellation)?;
     if fs::metadata(input).map_err(|e| e.to_string())?.len() > 32 * 1024 * 1024 {
         return Err("Structured input exceeds 32 MiB safety limit".into());
     }
@@ -1070,6 +1208,7 @@ fn run_data_conversion_sync(
             validate_headers(headers.iter())?;
             let mut items = Vec::new();
             for result in csv_reader.records() {
+                check_data_cancellation(cancellation)?;
                 let record = result.map_err(|e| format!("CSV record error: {}", e))?;
                 let mut map = serde_json::Map::new();
                 for (header, cell) in headers.iter().zip(record.iter()) {
@@ -1117,6 +1256,7 @@ fn run_data_conversion_sync(
             validate_headers(headers.iter().map(String::as_str))?;
 
             for row in rows {
+                check_data_cancellation(cancellation)?;
                 let mut map = serde_json::Map::new();
                 for (header, cell) in headers.iter().zip(row.iter()) {
                     let val = match cell {
@@ -1172,6 +1312,7 @@ fn run_data_conversion_sync(
                             .map_err(|e| format!("Excel header write error: {}", e))?;
                     }
                     for (row_idx, item) in arr.iter().enumerate() {
+                        check_data_cancellation(cancellation)?;
                         if let Some(obj) = item.as_object() {
                             for (col_idx, header) in headers.iter().enumerate() {
                                 if let Some(val) = obj.get(header) {
@@ -1274,6 +1415,7 @@ fn run_data_conversion_sync(
                 }
                 let mut headers = std::collections::BTreeSet::new();
                 for item in arr {
+                    check_data_cancellation(cancellation)?;
                     if let Some(obj) = item.as_object() {
                         for key in obj.keys() {
                             headers.insert(key.to_string());
@@ -1377,6 +1519,7 @@ fn run_data_conversion_sync(
             sql.push_str(");\n\n");
 
             for result in csv_reader.records() {
+                check_data_cancellation(cancellation)?;
                 let record = result.map_err(|e| format!("CSV record error: {}", e))?;
                 sql.push_str(&format!(
                     "INSERT INTO \"{}\" VALUES (",
@@ -1411,6 +1554,7 @@ fn run_data_conversion_sync(
 
             let mut items = Vec::new();
             for line in content.lines() {
+                check_data_cancellation(cancellation)?;
                 if line.trim().is_empty() {
                     continue;
                 }
@@ -1453,11 +1597,13 @@ fn run_data_conversion_sync(
                 .query_map([], |row| row.get::<_, String>(0))
                 .map_err(|e| format!("SQL error: {}", e))?;
             for name in rows {
+                check_data_cancellation(cancellation)?;
                 table_names.push(name.map_err(|e| format!("SQL error: {}", e))?);
             }
 
             let mut db_dump = serde_json::Map::new();
             for table in table_names {
+                check_data_cancellation(cancellation)?;
                 let mut table_data = Vec::new();
                 let query = format!("SELECT * FROM \"{}\"", table.replace('"', "\"\""));
                 let mut stmt = conn
@@ -1467,6 +1613,7 @@ fn run_data_conversion_sync(
                     stmt.column_names().iter().map(|s| s.to_string()).collect();
                 let mut rows = stmt.query([]).map_err(|e| format!("SQL error: {}", e))?;
                 while let Some(row) = rows.next().map_err(|e| format!("SQL error: {}", e))? {
+                    check_data_cancellation(cancellation)?;
                     let mut row_map = serde_json::Map::new();
                     for (i, col) in column_names.iter().enumerate() {
                         let val: Value = match row.get_ref(i) {
@@ -1505,6 +1652,7 @@ fn run_data_conversion_sync(
 
             let mut entries = Vec::new();
             for caps in entry_re.captures_iter(&content) {
+                check_data_cancellation(cancellation)?;
                 let mut map = serde_json::Map::new();
                 map.insert("type".to_string(), Value::String(caps[1].to_string()));
                 map.insert("id".to_string(), Value::String(caps[2].trim().to_string()));
@@ -1532,6 +1680,7 @@ fn run_data_conversion_sync(
             let mut events = Vec::new();
             let mut current_event = None;
             for line in content.lines() {
+                check_data_cancellation(cancellation)?;
                 let line = line.trim();
                 if line == "BEGIN:VEVENT" {
                     current_event = Some(serde_json::Map::new());
@@ -1558,6 +1707,16 @@ fn run_data_conversion_sync(
     }
 
     Ok(())
+}
+
+fn check_data_cancellation(
+    cancellation: Option<&tokio::sync::watch::Receiver<bool>>,
+) -> Result<(), String> {
+    if cancellation.is_some_and(|receiver| *receiver.borrow()) {
+        Err("Conversion cancelled".to_string())
+    } else {
+        Ok(())
+    }
 }
 
 fn validate_headers<'a>(headers: impl Iterator<Item = &'a str>) -> Result<(), String> {
@@ -1748,7 +1907,7 @@ async fn run_data_conversion(
     from: &str,
     to: &str,
 ) -> Result<(), String> {
-    run_data_conversion_sync(input, output, from, to)
+    run_data_conversion_sync(input, output, from, to, None)
 }
 
 #[cfg(test)]
@@ -1843,6 +2002,38 @@ mod tests {
         let content = fs::read_to_string(output_path).unwrap();
         assert!(content.contains("CREATE TABLE IF NOT EXISTS \"user_table\""));
         assert!(content.contains("'O''Connor'"));
+    }
+
+    #[test]
+    fn cancelled_native_data_job_stops_before_writing() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("test.csv");
+        let output_path = dir.path().join("test.json");
+        fs::write(&input_path, "name\nAlice\n").unwrap();
+        let (sender, receiver) = tokio::sync::watch::channel(false);
+        sender.send_replace(true);
+
+        let error =
+            run_data_conversion_sync(&input_path, &output_path, "csv", "json", Some(&receiver))
+                .unwrap_err();
+
+        assert_eq!(error, "Conversion cancelled");
+        assert!(!output_path.exists());
+    }
+
+    #[test]
+    fn fidelity_warnings_cover_known_lossy_structural_routes() {
+        assert!(fidelity_warnings("xlsx", "json")[0].contains("first XLSX worksheet"));
+        assert!(fidelity_warnings("pdf", "docx")[0].contains("complex layout"));
+        assert!(fidelity_warnings("json", "csv")[0].contains("formula-like"));
+    }
+
+    #[test]
+    fn batch_validation_rejects_empty_oversized_and_malformed_requests() {
+        assert!(validate_batch_request(&[], "json").is_err());
+        assert!(validate_batch_request(&vec!["x".to_string(); 257], "json").is_err());
+        assert!(validate_batch_request(&["x".to_string()], "../json").is_err());
+        assert!(validate_batch_request(&["x".to_string()], "json").is_ok());
     }
 
     #[tokio::test]
