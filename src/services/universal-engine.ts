@@ -35,6 +35,26 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
         return { is_valid: supported, warnings: [], error: supported ? null : "This browser conversion is not supported.", file_info: null } as unknown as T;
     }
 
+    if (cmd === "validate_jobs") {
+        const jobId = String(args?.jobId || "");
+        if (cancelledJobs.delete(jobId)) throw new Error("Validation cancelled");
+        const inputPaths = Array.isArray(args?.inputPaths) ? args.inputPaths.map(String).slice(0, 256) : [];
+        const targetFormat = String(args?.targetFormat || "").toLowerCase();
+        return inputPaths.map(inputPath => {
+            const extension = inputPath.split(".").pop()?.toLowerCase() || "";
+            const supported = getFullFormatCatalog(extension).some(format => format.extension === targetFormat);
+            return {
+                input_path: inputPath,
+                result: {
+                    is_valid: supported,
+                    warnings: [],
+                    error: supported ? null : "This browser conversion is not supported.",
+                    file_info: null,
+                },
+            };
+        }) as unknown as T;
+    }
+
     if (cmd === "cancel_job") {
         cancelledJobs.add(String(args?.jobId || ""));
         return undefined as T;
@@ -42,7 +62,7 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
 
     if (cmd === "get_presets") {
         return [
-            { id: "pre-1", title: "PDF to Word (Editable)", target_name: "Word", from_category: "document", to_format: "docx", description: "Text extraction (Browser)", badge: "Web", icon: "file-text" },
+            { id: "pre-1", title: "PDF to Editable DOCX", target_name: "DOCX", from_category: "document", to_format: "docx", description: "Text extraction with limited layout fidelity", badge: "Web", icon: "file-text" },
             { id: "pre-2", title: "Image to WebP", target_name: "WebP", from_category: "image", to_format: "webp", description: "Canvas (Browser)", badge: "Web", icon: "image" }
         ] as unknown as T;
     }
@@ -105,6 +125,7 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
     }
 
     if (cmd === "check_sidecars") {
+        const missing = (name: string) => ({ name, available: false, version: null, path_or_sidecar: "browser", error: "Desktop engine unavailable in browser mode" });
         return {
             binaries: [],
             categories: [
@@ -112,9 +133,16 @@ export async function handleUniversalEngine<T>(cmd: string, args?: Record<string
                 { category: "Audio", ready: false, engine: "N/A", message: "Desktop required" },
                 { category: "Images", ready: true, engine: "Canvas", message: "Basic support" },
                 { category: "Documents", ready: true, engine: "jsPDF/PDF.js", message: "Limited fidelity" },
-                { category: "Data", ready: true, engine: "JS-Logic", message: "Full support" }
+                { category: "Data", ready: true, engine: "JS-Logic", message: "CSV and JSON only" }
             ],
-            all_ready: false
+            all_ready: false,
+            ffmpeg: missing("ffmpeg"),
+            ffprobe: missing("ffprobe"),
+            pandoc: missing("pandoc"),
+            magick: missing("magick"),
+            imagemagick: missing("magick"),
+            pdftotext: missing("pdftotext"),
+            pdftohtml: missing("pdftohtml"),
         } as unknown as T;
     }
 
@@ -154,6 +182,10 @@ async function runRealImageTranscode(file: File, ext: string): Promise<Blob> {
             const canvas = document.createElement("canvas");
             canvas.width = img.width; canvas.height = img.height;
             const ctx = canvas.getContext("2d");
+            if (ext === "jpg" && ctx) {
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
             ctx?.drawImage(img, 0, 0);
             const mime = ext === "jpg" ? "image/jpeg" : `image/${ext}`;
             canvas.toBlob(b => {
@@ -185,8 +217,12 @@ async function runImageToPdf(file: File): Promise<Blob> {
     }
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF();
-    const data = await new Promise<string>(r => {
-        const fr = new FileReader(); fr.onload = (e) => r(e.target?.result as string); fr.readAsDataURL(file);
+    const jpeg = await runRealImageTranscode(file, "jpg");
+    const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => resolve(event.target?.result as string);
+        reader.onerror = () => reject(new Error("Image could not be read"));
+        reader.readAsDataURL(jpeg);
     });
     doc.addImage(data, "JPEG", 10, 10, 190, 0);
     return doc.output("blob");
@@ -196,7 +232,18 @@ async function runTextToPdf(file: File): Promise<Blob> {
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF();
     const text = await file.text();
-    doc.text(text.substring(0, 5000), 10, 10);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const lines = doc.splitTextToSize(text, pageWidth - 20) as string[];
+    let y = 14;
+    for (const line of lines) {
+        if (y > pageHeight - 12) {
+            doc.addPage();
+            y = 14;
+        }
+        doc.text(line, 10, y);
+        y += 6;
+    }
     return doc.output("blob");
 }
 
@@ -209,41 +256,51 @@ async function runTextExtraction(file: File, target: string): Promise<string> {
 
 async function runCsvToJson(file: File): Promise<string> {
     const text = await file.text();
-    const lines = text.split(/\r?\n/).filter(l => l.trim());
-    if (lines.length === 0) return "[]";
-
-    // Naive CSV parser that handles basic quoted strings
-    const parseCsvLine = (line: string) => {
-        const result = [];
-        let current = "";
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-            if (char === '"') {
-                if (inQuotes && line[i + 1] === '"') {
-                    current += '"';
-                    i++;
-                } else {
-                    inQuotes = !inQuotes;
-                }
-            } else if (char === ',' && !inQuotes) {
-                result.push(current.trim());
-                current = "";
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let field = "";
+    let inQuotes = false;
+    let afterQuote = false;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') {
+            if (inQuotes && text[i + 1] === '"') {
+                field += '"';
+                i++;
+            } else if (inQuotes) {
+                inQuotes = false;
+                afterQuote = true;
+            } else if (field.length === 0 && !afterQuote) {
+                inQuotes = true;
             } else {
-                current += char;
+                throw new Error("Malformed CSV: quote inside an unquoted field");
             }
+        } else if (char === "," && !inQuotes) {
+            row.push(field);
+            field = "";
+            afterQuote = false;
+        } else if ((char === "\n" || char === "\r") && !inQuotes) {
+            if (char === "\r" && text[i + 1] === "\n") i++;
+            row.push(field);
+            if (row.some(cell => cell.length > 0)) rows.push(row);
+            row = [];
+            field = "";
+            afterQuote = false;
+        } else {
+            if (afterQuote) throw new Error("Malformed CSV: unexpected text after a quoted field");
+            field += char;
         }
-        if (inQuotes) throw new Error("Malformed CSV: unterminated quoted field");
-        result.push(current.trim());
-        return result;
-    };
+    }
+    if (inQuotes) throw new Error("Malformed CSV: unterminated quoted field");
+    row.push(field);
+    if (row.some(cell => cell.length > 0)) rows.push(row);
+    if (rows.length === 0) return "[]";
 
-    const headers = parseCsvLine(lines[0]);
+    const headers = rows[0];
     if (headers.some(header => !header) || new Set(headers).size !== headers.length) {
         throw new Error("CSV headers must be non-empty and unique");
     }
-    const data = lines.slice(1).map(line => {
-        const values = parseCsvLine(line);
+    const data = rows.slice(1).map(values => {
         if (values.length !== headers.length) throw new Error("Malformed CSV: row width does not match headers");
         const obj: any = {};
         headers.forEach((header, i) => {
@@ -273,6 +330,9 @@ async function runJsonToCsv(file: File): Promise<string> {
     if (headers.length === 0) return "";
 
     const csvCell = (value: unknown): string => {
+        if (typeof value === "object" && value !== null) {
+            throw new Error("Nested JSON values cannot be represented safely in CSV");
+        }
         let text = String(value ?? "");
         if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
         return /[,\n\r"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -313,7 +373,7 @@ function getFullFormatCatalog(ext: string): FormatOption[] {
                 subcategory: "Universal",
                 description: `Browser-based ${t.toUpperCase()} export`,
                 comparison_note: ext === "pdf" ? "Basic text extraction only" : null,
-                is_lossless: true,
+                is_lossless: false,
                 is_recommended: true,
                 recommended_for: ["Editing", "Sharing"],
                 sidecar_engine: "Browser-Core",
@@ -334,7 +394,7 @@ function getFullFormatCatalog(ext: string): FormatOption[] {
                 subcategory: "Graphics",
                 description: `Canvas-based ${t.toUpperCase()} encoding`,
                 comparison_note: null,
-                is_lossless: ["png"].includes(t),
+                is_lossless: false,
                 is_recommended: true,
                 recommended_for: ["Web"],
                 sidecar_engine: "Browser-Canvas",
@@ -354,12 +414,12 @@ function getFullFormatCatalog(ext: string): FormatOption[] {
                 subcategory: "Universal",
                 description: `JS-based ${t.toUpperCase()} conversion`,
                 comparison_note: null,
-                is_lossless: true,
+                is_lossless: false,
                 is_recommended: true,
                 recommended_for: ["Analysis"],
                 sidecar_engine: "JS-Logic",
-                pros: ["Precise"],
-                cons: []
+                pros: ["Runs locally"],
+                cons: ["CSV cannot preserve JSON types"]
             });
         });
     }

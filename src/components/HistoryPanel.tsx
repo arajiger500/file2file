@@ -16,7 +16,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
         const k = 1024;
         const sizes = ["B", "KB", "MB", "GB"];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
     };
 
     return (
@@ -71,6 +71,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
                                     {item.success && (
                                         <span className="text-text-disabled">
                                             {item.output_path.split('.').pop()?.toUpperCase()}
+                                            {item.completed_at && ` · ${new Date(item.completed_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
                                         </span>
                                     )}
                                 </div>

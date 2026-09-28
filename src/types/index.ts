@@ -126,11 +126,13 @@ export interface ConversionResult {
     download_url?: string;
     error?: string;
     warnings?: string[];
+    completed_at?: string;
 }
 
 export interface FileProbeResult {
     has_video: boolean;
     has_audio: boolean;
+    has_subtitle: boolean;
     duration: number;
     width: number;
     height: number;
@@ -142,4 +144,9 @@ export interface ValidationResult {
     warnings: string[];
     error: string | null;
     file_info: FileProbeResult | null;
+}
+
+export interface BatchValidationItem {
+    input_path: string;
+    result: ValidationResult;
 }

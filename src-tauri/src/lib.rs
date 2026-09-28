@@ -54,6 +54,16 @@ mod commands {
     }
 
     #[tauri::command]
+    pub async fn validate_jobs(
+        app: AppHandle,
+        job_id: String,
+        input_paths: Vec<String>,
+        target_format: String,
+    ) -> Result<Vec<converter::BatchValidationItem>, String> {
+        converter::validate_batch(&app, &job_id, input_paths, &target_format).await
+    }
+
+    #[tauri::command]
     pub async fn start_conversion(
         app: AppHandle,
         request: ConversionRequest,
@@ -97,6 +107,7 @@ pub fn run() {
             commands::get_presets,
             commands::check_sidecars,
             commands::validate_job,
+            commands::validate_jobs,
             commands::start_conversion,
             commands::cancel_job,
             commands::show_in_folder,

@@ -6,6 +6,7 @@ import {
     ConversionRequest,
     ConversionResult,
     ValidationResult,
+    BatchValidationItem,
 } from "../types";
 import { handleUniversalEngine } from "./universal-engine";
 
@@ -32,11 +33,19 @@ export const api = {
     checkSidecars: () => invokeTauri<SidecarHealthReport>("check_sidecars"),
     validateJob: (inputPath: string, targetFormat: string) =>
         invokeTauri<ValidationResult>("validate_job", { inputPath, targetFormat }),
+    validateJobs: (jobId: string, inputPaths: string[], targetFormat: string) =>
+        invokeTauri<BatchValidationItem[]>("validate_jobs", { jobId, inputPaths, targetFormat }),
     startConversion: (request: ConversionRequest) =>
         invokeTauri<ConversionResult>("start_conversion", { request }),
     cancelJob: (jobId: string) =>
         invokeTauri<void>("cancel_job", { jobId }),
     showInFolder: (path: string) => invokeTauri<void>("show_in_folder", { path }),
+    chooseOutputDirectory: async (): Promise<string | null> => {
+        if (!isTauri()) return null;
+        const { open } = await import("@tauri-apps/plugin-dialog");
+        const selected = await open({ directory: true, multiple: false, title: "Choose output folder" });
+        return typeof selected === "string" ? selected : null;
+    },
     downloadFile: async (result: ConversionResult, fallbackFilename?: string) => {
         const filename = fallbackFilename || result.output_path.split("/").pop() || "file2file_output";
         if (result.download_url) {

@@ -108,7 +108,19 @@ pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
     let caps = Registry::get_compatible_targets(input_ext);
     caps.into_iter()
         .map(|c| {
-            let name = match c.category {
+            let target_category = match c.to_ext.as_str() {
+                "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" | "opus" => FileCategory::Audio,
+                "webp" | "png" | "jpg" | "jpeg" | "ico" | "bmp" | "tiff" | "tga" => {
+                    FileCategory::Image
+                }
+                "pdf" | "docx" | "md" | "html" | "txt" | "epub" | "rtf" | "odt" | "srt" => {
+                    FileCategory::Document
+                }
+                "csv" | "json" | "xlsx" | "yaml" | "xml" | "toml" | "sql" => FileCategory::Data,
+                "zip" | "folder" => FileCategory::Archive,
+                _ => c.category.clone(),
+            };
+            let name = match &target_category {
                 FileCategory::Video => format!("{} Media", c.to_ext.to_uppercase()),
                 FileCategory::Audio => format!("{} Audio", c.to_ext.to_uppercase()),
                 FileCategory::Image => format!("{} Graphics", c.to_ext.to_uppercase()),
@@ -124,42 +136,54 @@ pub fn get_compatible_formats(input_ext: &str) -> Vec<FormatOption> {
                 _ => format!("{} Format", c.to_ext.to_uppercase()),
             };
 
-            let description = match c.category {
-                FileCategory::Video => format!("FFmpeg {} video encoding", c.to_ext.to_uppercase()),
-                FileCategory::Audio => {
-                    format!("FFmpeg {} audio stream export", c.to_ext.to_uppercase())
+            let description = match c.engine {
+                crate::registry::ConversionEngine::FFmpeg => {
+                    if c.to_ext == "srt" {
+                        "FFmpeg embedded subtitle extraction".to_string()
+                    } else if target_category == FileCategory::Audio {
+                        format!("FFmpeg {} audio stream export", c.to_ext.to_uppercase())
+                    } else {
+                        format!("FFmpeg {} video encoding", c.to_ext.to_uppercase())
+                    }
                 }
-                FileCategory::Image => {
+                crate::registry::ConversionEngine::ImageMagick => {
                     format!("ImageMagick {} image encoding", c.to_ext.to_uppercase())
                 }
-                FileCategory::Document => {
-                    format!("Pandoc/Poppler {} document export", c.to_ext.to_uppercase())
+                crate::registry::ConversionEngine::Pandoc => {
+                    format!("Pandoc {} document export", c.to_ext.to_uppercase())
                 }
-                FileCategory::Data => format!(
-                    "Native structured {} serialization",
-                    c.to_ext.to_uppercase()
-                ),
-                FileCategory::Archive => {
+                crate::registry::ConversionEngine::Poppler => {
+                    format!("Poppler {} document extraction", c.to_ext.to_uppercase())
+                }
+                _ if target_category == FileCategory::Archive => {
                     if c.to_ext == "folder" {
                         "Extract all files from ZIP".to_string()
                     } else {
                         "High-performance ZIP compression".to_string()
                     }
                 }
+                crate::registry::ConversionEngine::RustNative => format!(
+                    "Native structured {} serialization",
+                    c.to_ext.to_uppercase()
+                ),
                 _ => format!("Convert to {}", c.to_ext),
             };
 
             FormatOption {
-                extension: c.to_ext,
+                extension: c.to_ext.clone(),
                 name,
-                category: c.category,
+                category: target_category,
                 subcategory: c.subcategory,
                 description,
                 comparison_note: c.fidelity_note,
                 is_lossless: c.is_lossless,
                 is_recommended: true,
                 recommended_for: c.recommended_for,
-                sidecar_engine: c.engine.to_string(),
+                sidecar_engine: if c.from_ext == "pdf" && c.to_ext != "txt" {
+                    "Poppler + Pandoc".to_string()
+                } else {
+                    c.engine.to_string()
+                },
                 pros: vec!["Fast".to_string()],
                 cons: vec![],
             }
@@ -211,12 +235,12 @@ pub fn get_quick_presets() -> Vec<QuickPreset> {
     vec![
         QuickPreset {
             id: "p1".to_string(),
-            title: "PDF to Editable Word".to_string(),
+            title: "PDF to Editable DOCX".to_string(),
             target_name: "Word".to_string(),
             from_category: FileCategory::Document,
             to_format: "docx".to_string(),
-            description: "Real text extraction".to_string(),
-            badge: "Pro".to_string(),
+            description: "Text and basic layout extraction".to_string(),
+            badge: "Docs".to_string(),
             icon: "file-text".to_string(),
         },
         QuickPreset {
@@ -225,8 +249,8 @@ pub fn get_quick_presets() -> Vec<QuickPreset> {
             target_name: "WebP".to_string(),
             from_category: FileCategory::Image,
             to_format: "webp".to_string(),
-            description: "Next-gen compression".to_string(),
-            badge: "Fast".to_string(),
+            description: "Smaller web-friendly images".to_string(),
+            badge: "Images".to_string(),
             icon: "image".to_string(),
         },
         QuickPreset {
@@ -250,4 +274,60 @@ pub fn get_quick_presets() -> Vec<QuickPreset> {
             icon: "music".to_string(),
         },
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mixed_media_targets_use_the_target_category() {
+        let formats = get_compatible_formats("mp4");
+        let mp3 = formats
+            .iter()
+            .find(|format| format.extension == "mp3")
+            .unwrap();
+        let srt = formats
+            .iter()
+            .find(|format| format.extension == "srt")
+            .unwrap();
+        assert_eq!(mp3.category, FileCategory::Audio);
+        assert_eq!(srt.category, FileCategory::Document);
+        assert!(srt.description.contains("subtitle extraction"));
+    }
+
+    #[test]
+    fn pdf_editable_exports_report_every_required_engine() {
+        let formats = get_compatible_formats("pdf");
+        let docx = formats
+            .iter()
+            .find(|format| format.extension == "docx")
+            .unwrap();
+        let text = formats
+            .iter()
+            .find(|format| format.extension == "txt")
+            .unwrap();
+        assert_eq!(docx.sidecar_engine, "Poppler + Pandoc");
+        assert_eq!(text.sidecar_engine, "Poppler (Poppler-utils)");
+    }
+
+    #[test]
+    fn transcoding_a_lossy_source_is_not_labelled_lossless() {
+        let formats = get_compatible_formats("mp3");
+        assert!(
+            !formats
+                .iter()
+                .find(|format| format.extension == "wav")
+                .unwrap()
+                .is_lossless
+        );
+        let images = get_compatible_formats("jpg");
+        assert!(
+            !images
+                .iter()
+                .find(|format| format.extension == "png")
+                .unwrap()
+                .is_lossless
+        );
+    }
 }

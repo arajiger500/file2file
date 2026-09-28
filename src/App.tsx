@@ -1,5 +1,5 @@
 import { isTauri } from "./services/api";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Header } from "./components/Header";
 import { DropZone } from "./components/DropZone";
 import { FormatSelectionPage } from "./components/FormatSelectionPage";
@@ -9,6 +9,12 @@ import { QuickConverters } from "./components/QuickConverters";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { DiagnosticModal } from "./components/DiagnosticModal";
 import { api } from "./services/api";
+import {
+    DEFAULT_SETTINGS,
+    getEngineIssue,
+    intersectFormatGroups,
+    sanitizeSettings,
+} from "./services/conversion-planning";
 import {
     FileItem,
     FormatOption,
@@ -33,30 +39,27 @@ export function App() {
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
     const [isDiagnosticOpen, setIsDiagnosticOpen] = useState<boolean>(false);
     const [history, setHistory] = useState<ConversionResult[]>([]);
+    const [systemError, setSystemError] = useState<string | null>(null);
+    const [formatError, setFormatError] = useState<string | null>(null);
+    const [formatsLoading, setFormatsLoading] = useState(false);
+    const formatRequestRef = useRef(0);
 
-    const [settings, setSettings] = useState<AdvancedSettings>({
-        crf: 23,
-        resolution: "original",
-        hardwareAccel: false,
-        selectedEncoder: "auto",
-        stripMetadata: true,
-        audioBitrate: "192k",
-        collisionPolicy: "autorename",
-        maxParallelJobs: 4,
-    });
+    const [settings, setSettings] = useState<AdvancedSettings>(DEFAULT_SETTINGS);
 
     const loadSystemData = async () => {
-        try {
-            const [hw, sc, ps] = await Promise.all([
-                api.detectHardware(),
-                api.checkSidecars(),
-                api.getPresets(),
-            ]);
-            setHardware(hw);
-            setSidecars(sc);
-            setPresets(ps);
-        } catch (err) {
-            console.error("Initialization error:", err);
+        setSystemError(null);
+        const [hw, sc, ps] = await Promise.allSettled([
+            api.detectHardware(),
+            api.checkSidecars(),
+            api.getPresets(),
+        ]);
+        if (hw.status === "fulfilled") setHardware(hw.value);
+        if (sc.status === "fulfilled") setSidecars(sc.value);
+        if (ps.status === "fulfilled") setPresets(ps.value);
+        const failures = [hw, sc, ps].filter(result => result.status === "rejected");
+        if (failures.length > 0) {
+            console.error("Initialization errors:", failures);
+            setSystemError(`${failures.length} system check${failures.length === 1 ? "" : "s"} could not be loaded. Refresh diagnostics to retry.`);
         }
     };
 
@@ -67,7 +70,7 @@ export function App() {
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
                 if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-                    setSettings(prev => ({ ...prev, ...parsed }));
+                    setSettings(sanitizeSettings(parsed));
                 }
             }
             const savedHistory = localStorage.getItem("file2file_history");
@@ -95,6 +98,21 @@ export function App() {
         } catch {}
     }, [settings]);
 
+    useEffect(() => {
+        if (!hardware) return;
+        setSettings(current => {
+            const encoderAvailable = current.selectedEncoder === "auto" ||
+                hardware.available_encoders.some(encoder => encoder.id === current.selectedEncoder);
+            const hardwareAccel = current.hardwareAccel && hardware.hardware_acceleration_supported;
+            if (encoderAvailable && hardwareAccel === current.hardwareAccel) return current;
+            return {
+                ...current,
+                hardwareAccel,
+                selectedEncoder: encoderAvailable ? current.selectedEncoder : "auto",
+            };
+        });
+    }, [hardware]);
+
     // Persist history
     useEffect(() => {
         try {
@@ -102,42 +120,79 @@ export function App() {
         } catch {}
     }, [history]);
 
-    const handleAddFiles = async (newFiles: FileItem[]) => {
+    // A mixed batch may only choose targets supported by every selected source.
+    // Request sequencing prevents a slow lookup for an older selection from winning.
+    useEffect(() => {
+        const requestId = ++formatRequestRef.current;
+        if (files.length === 0) {
+            setAvailableFormats([]);
+            setFormatError(null);
+            setFormatsLoading(false);
+            return;
+        }
+        setFormatsLoading(true);
+        setFormatError(null);
+        const extensions = Array.from(new Set(files.map(file => file.extension.toLowerCase())));
+        void Promise.all(extensions.map(extension => api.getCompatibleTargets(extension)))
+            .then(formatGroups => {
+                if (requestId !== formatRequestRef.current) return;
+                const commonFormats = intersectFormatGroups(formatGroups);
+                setAvailableFormats(commonFormats);
+                if (commonFormats.length === 0) {
+                    setFormatError("These files do not share a safe output format. Split them into compatible batches.");
+                }
+            })
+            .catch(error => {
+                if (requestId === formatRequestRef.current) {
+                    setAvailableFormats([]);
+                    setFormatError(`Compatible formats could not be loaded: ${String(error)}`);
+                }
+            })
+            .finally(() => {
+                if (requestId === formatRequestRef.current) setFormatsLoading(false);
+            });
+    }, [files]);
+
+    const handleAddFiles = (newFiles: FileItem[]) => {
         if (newFiles.length === 0) return;
         setFiles(prev => [...prev, ...newFiles.filter(n => !prev.some(f => f.path === n.path))].slice(0, 256));
-
-        try {
-            const primaryExt = newFiles[0].extension;
-            const formats = await api.getCompatibleTargets(primaryExt);
-            setAvailableFormats(formats);
-        } catch (err) {
-            console.error("Format fetch error:", err);
-        }
     };
 
     const handleSelectFormat = (format: FormatOption) => {
+        if (!availableFormats.some(candidate => candidate.extension === format.extension)) {
+            setFormatError(`.${format.extension} is not compatible with every file in this batch.`);
+            return;
+        }
+        if (getEngineIssue(format, sidecars)) {
+            setSystemError(`The local engine required for .${format.extension} is missing or unusable. Open Engine diagnostics for details.`);
+            setIsDiagnosticOpen(true);
+            return;
+        }
         setSelectedFormatOption(format);
         setCurrentStep("convert-box");
     };
 
     const handleSelectPreset = async (p: QuickPreset) => {
+        if (files.length === 0) {
+            setSystemError(`Add ${p.from_category === "image" ? "an" : "a"} ${p.from_category} file before using this shortcut.`);
+            return;
+        }
+        if (!files.some(file => file.category === p.from_category)) {
+            setSystemError(`This shortcut requires ${p.from_category} input.`);
+            return;
+        }
         // Find representative source extension
         let sourceExt = "";
-        if (files.length > 0) {
-            const match = files.find(f => f.category === p.from_category) || files[0];
-            sourceExt = match.extension;
-        } else {
-            sourceExt = p.from_category === "document" ? "pdf" :
-                        p.from_category === "image" ? "png" :
-                        p.from_category === "video" ? "mp4" : "mp4";
-        }
+        const match = files.find(f => f.category === p.from_category) || files[0];
+        sourceExt = match.extension;
 
         try {
             const formats = await api.getCompatibleTargets(sourceExt);
-            setAvailableFormats(formats);
-            const target = formats.find(f => f.extension === p.to_format) || formats[0];
+            const target = formats.find(f => f.extension === p.to_format && availableFormats.some(common => common.extension === f.extension));
             if (target) {
                 handleSelectFormat(target);
+            } else {
+                setSystemError(`.${p.to_format} is not compatible with every file in this batch.`);
             }
         } catch (err) {
             console.error("Preset format fetch error:", err);
@@ -145,9 +200,12 @@ export function App() {
     };
 
     const handleUpdateFileStatus = (id: string, status: FileItem["status"], result?: ConversionResult) => {
-        setFiles(prev => prev.map(f => (f.id === id ? { ...f, status, result } : f)));
-        if (result) {
-            setHistory(prev => [result, ...prev.filter(h => h.job_id !== result.job_id)].slice(0, 50));
+        const recordedResult = result
+            ? { ...result, completed_at: result.completed_at || new Date().toISOString() }
+            : undefined;
+        setFiles(prev => prev.map(f => (f.id === id ? { ...f, status, result: recordedResult } : f)));
+        if (recordedResult) {
+            setHistory(prev => [recordedResult, ...prev.filter(h => h.job_id !== recordedResult.job_id)].slice(0, 50));
         }
     };
 
@@ -186,15 +244,23 @@ export function App() {
                                 onRemoveFile={(id) => setFiles(prev => prev.filter(f => f.id !== id))}
                                 onClearFiles={() => setFiles([])}
                                 onDirectConvert={handleSelectFormat}
+                                compatibleFormats={availableFormats}
                             />
+
+                            {(systemError || formatError) && (
+                                <div role="alert" className="border border-warning/40 bg-warning/10 px-4 py-3 rounded-lg text-[13px] text-warning">
+                                    {formatError || systemError}
+                                </div>
+                            )}
 
                             {files.length > 0 && (
                                 <div className="flex justify-start">
                                     <button
                                         onClick={() => setCurrentStep("select-format")}
+                                        disabled={formatsLoading || availableFormats.length === 0}
                                         className="btn-primary flex items-center gap-2 group h-[48px] px-8"
                                     >
-                                        <span>Choose output format</span>
+                                        <span>{formatsLoading ? "Checking compatibility…" : "Choose output format"}</span>
                                         <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                                     </button>
                                 </div>
@@ -210,6 +276,8 @@ export function App() {
                                 onSelectFormat={handleSelectFormat}
                                 onBack={() => setCurrentStep("upload")}
                                 sidecars={sidecars}
+                                isLoading={formatsLoading}
+                                error={formatError}
                             />
                         </div>
                     )}

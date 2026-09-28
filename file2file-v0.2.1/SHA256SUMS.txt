@@ -1,0 +1,6 @@
+12bb3a6f721ec9043c2afcc371582149ec2a9269f5bd6a856f326e25513db9f5  aarch64-apple-darwin-File2File_0.2.1_aarch64.dmg
+44a2fef4403357e834f754b6b41788131a5c2fdb6250c566e52dd685d60f7918  x86_64-apple-darwin-File2File_0.2.1_x64.dmg
+5e59e7945f9e8b065ba6e0705d4aa5092615a35e7436d1e14ba8417a9a9eff5c  x86_64-pc-windows-msvc-File2File_0.2.1_x64_en-US.msi
+b01730afb2e125869c5482e5d4b78893dda9ca926d13c0671d76851aaee6e7e1  x86_64-pc-windows-msvc-File2File_0.2.1_x64-setup.exe
+c32b28c46e2f079510ac817f3d96c0acd3c2f107fcdd51737b0fb2828ac666d5  x86_64-unknown-linux-gnu-File2File_0.2.1_amd64.AppImage
+100a573c4a086a812ba08689a616f8c259914dc57323dfd608800eaa3f5751ad  x86_64-unknown-linux-gnu-File2File_0.2.1_amd64.deb
