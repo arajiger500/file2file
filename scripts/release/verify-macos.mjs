@@ -57,6 +57,8 @@ try {
   const executable = verifyApp(installed);
   run('hdiutil', ['detach', mount]);
   attached = false;
+  const windowChecker = path.join(temporary, 'check-window');
+  run('swiftc', ['scripts/release/check-macos-window.swift', '-o', windowChecker]);
   const log = fs.openSync(path.join(evidence, 'launch.log'), 'w');
   child = spawn(path.join(installed, 'Contents/MacOS', executable), [], { stdio: ['ignore', log, log] });
   fs.closeSync(log);
@@ -67,6 +69,14 @@ try {
   const result = await Promise.race([exited, delay(8000).then(() => ({ running: true }))]);
   report.launch = result;
   assert.equal(result.running, true, 'The installed application exited during launch; inspect launch.log');
+  const deadline = Date.now() + 60_000;
+  do {
+    report.window = JSON.parse(execFileSync(windowChecker, [String(child.pid), path.join(evidence, 'window.png')], { encoding: 'utf8', timeout: 15_000 }));
+    if (report.window.nonBlank) break;
+    assert.equal(child.exitCode, null, 'Application exited before its window rendered');
+    await delay(2000);
+  } while (Date.now() < deadline);
+  assert.equal(report.window?.nonBlank, true, 'App window stayed blank; inspect window.png and launch.log');
   try {
     run('screencapture', ['-x', path.join(evidence, 'desktop.png')]);
   } catch {

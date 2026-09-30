@@ -15,7 +15,7 @@ Configure these **repository Actions secrets** in GitHub Settings → Secrets an
 | `APPLE_PASSWORD` | App-specific password for that account, not its login password |
 | `APPLE_TEAM_ID` | Ten-character Apple Developer team ID |
 
-Credentials stay in repository secrets; never commit them. Tauri imports the signing certificate and performs notarization during packaging. Verification then checks the disk image, application signature, expected native architecture, installed copy, stapled ticket, Gatekeeper assessment and launch. Verification logs and any available desktop screenshot are saved as Actions artifacts.
+Credentials stay in repository secrets; never commit them. Tauri imports the signing certificate and performs notarization during packaging. Verification then checks the disk image, application signature, expected native architecture, installed copy, stapled ticket, Gatekeeper assessment and launch. A screenshot check waits up to 60 seconds for nonblank content inside the application window; merely keeping a process alive cannot pass verification. Verification logs and any available desktop screenshot are saved as Actions artifacts.
 
 Pull requests touching release files and manual workflow runs build preview packages with ad-hoc macOS signatures. They never create a release. Select `signed_macos` on a manual run to exercise signing and notarization before tagging. Preview packages still require normal macOS approval and are not a replacement for signed public releases.
 
