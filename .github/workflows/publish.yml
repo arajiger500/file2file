@@ -117,7 +117,16 @@ jobs:
             echo 'APPLE_SIGNING_IDENTITY=-' >> "$GITHUB_ENV"
           fi
 
+      - name: Build ad-hoc macOS preview installers
+        if: runner.os == 'macOS' && github.ref_type != 'tag' && inputs.signed_macos != true
+        shell: bash
+        run: |
+          # Tauri treats even empty certificate variables as a certificate import.
+          unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+          npm run tauri build -- --target "${{ matrix.target }}" --bundles "${{ matrix.bundles }}" -- --locked
+
       - name: Build native installers
+        if: runner.os != 'macOS' || github.ref_type == 'tag' || inputs.signed_macos == true
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           APPLE_CERTIFICATE: ${{ (github.ref_type == 'tag' || inputs.signed_macos == true) && runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
