@@ -4,6 +4,19 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      signed_macos:
+        description: Sign and notarize macOS preview packages using Apple secrets
+        type: boolean
+        default: false
+  pull_request:
+    branches: ["main"]
+    paths:
+      - .github/workflows/publish.yml
+      - scripts/verify-release.mjs
+      - scripts/release/**
+      - .github/docs/macos-release.md
 
 permissions:
   contents: read
@@ -26,10 +39,10 @@ jobs:
             bundles: nsis,msi
           - os: macos-26
             target: aarch64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg
           - os: macos-26-intel
             target: x86_64-apple-darwin
-            bundles: dmg
+            bundles: app,dmg
 
     runs-on: ${{ matrix.os }}
     env:
@@ -77,11 +90,50 @@ jobs:
       - name: Rust library tests
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib --test native_safety
 
+      - name: Configure macOS signing
+        if: startsWith(matrix.target, 'aarch64-apple-') || startsWith(matrix.target, 'x86_64-apple-')
+        shell: bash
+        env:
+          REQUIRE_NOTARIZATION: ${{ github.ref_type == 'tag' || inputs.signed_macos == true }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [[ "$REQUIRE_NOTARIZATION" == "true" ]]; then
+            missing=()
+            for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              [[ -n "${!name}" ]] || missing+=("$name")
+            done
+            if (( ${#missing[@]} )); then
+              echo "::error::Signed macOS releases require repository secrets: ${missing[*]}. See .github/docs/macos-release.md."
+              exit 1
+            fi
+            [[ "$APPLE_SIGNING_IDENTITY" == 'Developer ID Application:'* ]] || { echo '::error::Use a Developer ID Application certificate for direct distribution.'; exit 1; }
+            printf 'APPLE_SIGNING_IDENTITY=%s\n' "$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          else
+            echo 'APPLE_SIGNING_IDENTITY=-' >> "$GITHUB_ENV"
+          fi
+
       - name: Build native installers
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        env:
+          APPLE_CERTIFICATE: ${{ (github.ref_type == 'tag' || inputs.signed_macos == true) && runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ (github.ref_type == 'tag' || inputs.signed_macos == true) && runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_ID: ${{ (github.ref_type == 'tag' || inputs.signed_macos == true) && runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ (github.ref_type == 'tag' || inputs.signed_macos == true) && runner.os == 'macOS' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ (github.ref_type == 'tag' || inputs.signed_macos == true) && runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
         with:
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} -- --locked
       - run: node scripts/verify-release.mjs --artifacts
+      - name: Verify macOS disk image, signature, notarization and launch
+        if: runner.os == 'macOS'
+        env:
+          REQUIRE_NOTARIZATION: ${{ github.ref_type == 'tag' || inputs.signed_macos == true }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release/verify-macos.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: packages-${{ matrix.target }}
@@ -92,6 +144,13 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+      - name: Save macOS verification evidence
+        if: always() && runner.os == 'macOS'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-verification-${{ matrix.target }}
+          if-no-files-found: warn
+          path: qa-output/release/**
 
   draft-release:
     needs: build-release
@@ -125,7 +184,7 @@ jobs:
             const releaseOptions = {
               ...context.repo, tag_name: tag, name: 'File2File ' + tag,
               target_commitish: context.sha, draft: true,
-              body: 'External engines are not bundled. Install and smoke-test each native package before publishing this draft. See README.md. Packages are unsigned unless signing is configured separately.'
+              body: 'macOS Intel and Apple silicon packages passed Developer ID signature, notarization, disk-image integrity and launch checks. External conversion engines are not bundled. Windows and Linux packages are unsigned. Install and smoke-test each native package before publishing this draft. See README.md and .github/docs/macos-release.md.'
             };
             let release;
             try {
@@ -147,5 +206,8 @@ jobs:
               await github.rest.repos.deleteReleaseAsset({ ...context.repo, asset_id: existing.id });
             }
             for (const asset of [...packages, { name: 'SHA256SUMS.txt', data: Buffer.from(checksums) }]) {
-              await github.rest.repos.uploadReleaseAsset({ ...context.repo, release_id: release.data.id, ...asset });
+              await github.rest.repos.uploadReleaseAsset({
+                ...context.repo, release_id: release.data.id, ...asset,
+                headers: { 'content-type': asset.name.endsWith('.txt') ? 'text/plain' : 'application/octet-stream' }
+              });
             }
