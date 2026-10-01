@@ -1,0 +1,5 @@
+.git
+.openai
+.sites-runtime
+*.tar.gz
+*.zip
